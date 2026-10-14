@@ -12,7 +12,7 @@
       <h1>E-Class Prova Injector</h1>
       <p>LaTeX/Word → questões → prova no E-Class</p>
     </div>
-    <span id="version">v0.2.0-word</span>
+    <span id="version">v0.3.0-word</span>
   </header>
 
   <main>
@@ -40,7 +40,17 @@
         <label>Título no E-Class
           <input id="title" value="TESTE INJECTOR - APAGAR">
         </label>
+        <label>Abertas — formato padrão
+          <select id="openDefaultFormat">
+            <option value="lines">Com linhas</option>
+            <option value="blank">Espaço em branco</option>
+          </select>
+        </label>
+        <label>Abertas — linhas/altura padrão
+          <input id="openDefaultLines" type="number" min="1" max="100" value="10">
+        </label>
       </div>
+      <p class="hint">Questões sem alternativas são tratadas como abertas. Na prévia você pode alterar formato e número de linhas de cada aberta individualmente.</p>
       <div class="row">
         <button id="analyze" class="primary">Analisar prova</button>
         <button id="clearFile" class="ghost">Limpar</button>
@@ -69,6 +79,7 @@
       </div>
       <label class="block">Turmas</label>
       <div id="classes" class="checks"></div>
+      <p class="hint">“Carregar do portal” consulta as turmas, disciplinas, bimestres e a lista de alunos disponíveis na sua sessão atual.</p>
     </section>
 
     <details class="card">
@@ -110,6 +121,16 @@
 
     <section class="card">
       <div class="row space">
+        <div>
+          <h2>4. Corretor de gabaritos</h2>
+          <p class="hint">Exporta apenas o gabarito das objetivas. Se o Portal tiver sido carregado, inclui as turmas selecionadas e seus alunos.</p>
+        </div>
+        <button id="exportOmr" class="secondary">Exportar para Corretor</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row space">
         <h2>Prévia</h2>
         <span id="questionCount" class="pill">0 questões</span>
       </div>
@@ -128,9 +149,11 @@
   <script src="parser.js"></script>
   <script src="docx-core.js"></script>
   <script src="docx-parser.js"></script>
+  <script src="mixed-parser.js"></script>
   <script src="panel-core.js"></script>
   <script src="panel-parse.js"></script>
   <script src="panel-run.js"></script>
+  <script src="word-features.js"></script>
   <script src="panel-init.js"></script>
 </body>
 </html>
