@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "E-Class Prova Injector",
+  "version": "0.1.1",
+  "description": "Importa provas em LaTeX e cria questões/avaliações no E-Class Prova.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs",
+    "activeTab",
+    "sidePanel",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://portal.educacaoadventista.org.br/*",
+    "https://api-avaliacoes.educacaoadventista.org.br/*",
+    "https://api-usuario.educacaoadventista.org.br/*",
+    "https://ti5v892yac.execute-api.sa-east-1.amazonaws.com/*",
+    "https://snv.educacaoadventista.org.br/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "E-Class Prova Injector",
+    "default_popup": "launcher.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  }
+}
