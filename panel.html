@@ -10,9 +10,9 @@
   <header>
     <div>
       <h1>E-Class Prova Injector</h1>
-      <p>LaTeX → questões → prova no E-Class</p>
+      <p>LaTeX/Word → questões → prova no E-Class</p>
     </div>
-    <span id="version">v0.1.1</span>
+    <span id="version">v0.2.0-word</span>
   </header>
 
   <main>
@@ -28,10 +28,10 @@
     </section>
 
     <section class="card">
-      <h2>1. Arquivo LaTeX</h2>
+      <h2>1. Arquivo da prova</h2>
       <label class="filebox">
-        <span>Selecionar arquivo .tex</span>
-        <input id="texFile" type="file" accept=".tex,text/x-tex,text/plain">
+        <span>Selecionar arquivo .tex ou .docx</span>
+        <input id="texFile" type="file" accept=".tex,.docx,text/x-tex,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
       </label>
       <div class="grid2">
         <label>Seção da prova
@@ -42,7 +42,7 @@
         </label>
       </div>
       <div class="row">
-        <button id="analyze" class="primary">Analisar LaTeX</button>
+        <button id="analyze" class="primary">Analisar prova</button>
         <button id="clearFile" class="ghost">Limpar</button>
       </div>
       <div id="analysisSummary" class="summary">Nenhum arquivo analisado.</div>
@@ -113,7 +113,7 @@
         <h2>Prévia</h2>
         <span id="questionCount" class="pill">0 questões</span>
       </div>
-      <div id="preview" class="preview empty">Analise um arquivo .tex para visualizar as questões.</div>
+      <div id="preview" class="preview empty">Analise um arquivo .tex ou .docx para visualizar as questões.</div>
     </section>
 
     <section class="card">
@@ -126,6 +126,8 @@
   </main>
 
   <script src="parser.js"></script>
+  <script src="docx-core.js"></script>
+  <script src="docx-parser.js"></script>
   <script src="panel-core.js"></script>
   <script src="panel-parse.js"></script>
   <script src="panel-run.js"></script>
