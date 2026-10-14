@@ -1,14 +1,14 @@
 async function loadPersistedConfig() {
   const { eciConfig } = await chrome.storage.local.get('eciConfig');
   if (!eciConfig) return;
-  for (const id of ['academicYear','association','division','entityId','profileId','publisher','union','entityName','levelId','countryId','sectionName']) {
+  for (const id of ['academicYear','association','division','entityId','profileId','publisher','union','entityName','levelId','countryId','sectionName','openDefaultFormat','openDefaultLines']) {
     if (eciConfig[id] != null && $(id)) $(id).value = eciConfig[id];
   }
 }
 
 async function persistConfig() {
   const o = {};
-  for (const id of ['academicYear','association','division','entityId','profileId','publisher','union','entityName','levelId','countryId','sectionName']) o[id] = $(id)?.value;
+  for (const id of ['academicYear','association','division','entityId','profileId','publisher','union','entityName','levelId','countryId','sectionName','openDefaultFormat','openDefaultLines']) o[id] = $(id)?.value;
   await chrome.storage.local.set({ eciConfig: o });
 }
 
@@ -29,6 +29,9 @@ function bind() {
     state.sourceMedia = [];
     state.fileName = null;
     state.parsed = [];
+    state.imageCache?.clear?.();
+    state.omrExternalId = null;
+    state.omrExportFileName = null;
     $('texFile').value = '';
     $('preview').innerHTML = 'Analise um arquivo .tex ou .docx para visualizar as questões.';
     $('preview').className = 'preview empty';
@@ -36,7 +39,7 @@ function bind() {
     $('questionCount').textContent = '0 questões';
   });
   $('copyLog').addEventListener('click', async () => { await navigator.clipboard.writeText($('log').textContent); log('Log copiado.', 'ok'); });
-  document.querySelectorAll('.advanced input, #sectionName').forEach(el => el.addEventListener('change', persistConfig));
+  document.querySelectorAll('.advanced input, #sectionName, #openDefaultFormat, #openDefaultLines').forEach(el => el.addEventListener('change', persistConfig));
 }
 
 async function safe(fn) {
@@ -53,7 +56,7 @@ async function safe(fn) {
   await loadPersistedConfig();
   rebuildSelectors();
   bind();
-  log('Injector carregado. Para começar: abra o E-Class, detecte a sessão e selecione um .tex ou .docx.');
+  log('Injector carregado. Aceita .tex e .docx, questões objetivas/abertas e exportação para o Corretor.');
   await restorePendingAssessment();
   await detectSession();
 })();
