@@ -30,25 +30,66 @@ function renderPreview() {
 }
 
 function analyzeLatex() {
-  if (!state.latex.trim()) throw new Error('Selecione um arquivo .tex primeiro.');
-  const parsed = EClassParser.parseLatex(state.latex, $('sectionName').value.trim());
+  let parsed;
+  let kind;
+  if (state.sourceType === 'docx') {
+    if (!state.docxPackage) throw new Error('Selecione um arquivo .docx primeiro.');
+    parsed = EClassDocxParser.questionsFromPackage(state.docxPackage, $('sectionName').value.trim());
+    state.macroMap = new Map();
+    state.sourceWarnings = parsed.warnings || [];
+    state.sourceMedia = parsed.media || [];
+    kind = 'Word';
+  } else {
+    if (!state.latex.trim()) throw new Error('Selecione um arquivo .tex primeiro.');
+    parsed = EClassParser.parseLatex(state.latex, $('sectionName').value.trim());
+    state.macroMap = parsed.macroMap;
+    state.sourceWarnings = [];
+    state.sourceMedia = [];
+    kind = 'LaTeX';
+  }
+
   state.parsed = parsed.questions;
-  state.macroMap = parsed.macroMap;
   const missing = state.parsed.filter(q => q.correct == null).map(q => q.number);
   const formulaCount = state.parsed.reduce((acc, q) => {
     const all = [q.stem, ...q.choices];
     return acc + all.reduce((n, s) => n + EClassParser.latexTextToHtmlSkeleton(s, state.macroMap).math.length, 0);
   }, 0);
-  $('analysisSummary').textContent = `${state.fileName || 'LaTeX'} · ${state.parsed.length} questões · ${formulaCount} fórmulas · gabarito ${state.parsed.length - missing.length}/${state.parsed.length}`;
+  const mediaText = state.sourceMedia.length ? ` · ${state.sourceMedia.length} imagens detectadas` : '';
+  $('analysisSummary').textContent = `${state.fileName || kind} · ${kind} · ${state.parsed.length} questões · ${formulaCount} fórmulas · gabarito ${state.parsed.length - missing.length}/${state.parsed.length}${mediaText}`;
   if (missing.length) log(`Gabarito ausente nas questões: ${missing.join(', ')}`, 'warn');
-  else log(`LaTeX analisado: ${state.parsed.length} questões com gabarito.`, 'ok');
+  else log(`${kind} analisado: ${state.parsed.length} questões com gabarito.`, 'ok');
+  [...new Set(state.sourceWarnings)].forEach(w => log(`Word: ${w}`, 'warn'));
+  if (state.sourceMedia.length) log(`${state.sourceMedia.length} imagem(ns) foram extraídas do DOCX, mas o upload de imagens comuns para o E-Class ainda não foi mapeado; serão mantidos marcadores no texto.`, 'warn');
   renderPreview();
 }
 
 async function fileChanged(file) {
   state.fileName = file?.name || null;
-  state.latex = file ? await file.text() : '';
-  $('analysisSummary').textContent = file ? `${file.name} carregado. Clique “Analisar LaTeX”.` : 'Nenhum arquivo analisado.';
+  state.parsed = [];
+  state.latex = '';
+  state.docxPackage = null;
+  state.sourceWarnings = [];
+  state.sourceMedia = [];
+  if (!file) {
+    state.sourceType = 'tex';
+    $('analysisSummary').textContent = 'Nenhum arquivo analisado.';
+    return;
+  }
+
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith('.docx')) {
+    state.sourceType = 'docx';
+    $('analysisSummary').textContent = `${file.name} carregado. Abrindo documento Word...`;
+    state.docxPackage = await EClassDocxParser.parsePackage(await file.arrayBuffer());
+    $('analysisSummary').textContent = `${file.name} carregado · ${state.docxPackage.paragraphs.length} parágrafos · clique “Analisar prova”.`;
+    log(`DOCX aberto: ${state.docxPackage.paragraphs.length} parágrafos e ${state.docxPackage.media.length} imagem(ns) detectada(s).`, 'ok');
+  } else if (lower.endsWith('.tex')) {
+    state.sourceType = 'tex';
+    state.latex = await file.text();
+    $('analysisSummary').textContent = `${file.name} carregado. Clique “Analisar prova”.`;
+  } else {
+    throw new Error('Formato não suportado. Use .tex ou .docx.');
+  }
 }
 
 async function uploadMath(latex) {
