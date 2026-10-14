@@ -52,16 +52,7 @@ chrome.runtime.onInstalled.addListener(() => {
   }
 });
 
-async function performFetch({ url, method = 'GET', headers = {}, body = null }) {
-  const opts = { method, headers, cache: 'no-store' };
-  if (body != null) opts.body = body;
-  let res;
-  try {
-    res = await fetch(url, opts);
-  } catch (e) {
-    return { ok: false, networkError: true, status: 0, statusText: '', data: null, text: String(e?.message || e) };
-  }
-
+async function responseObject(res) {
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
@@ -73,6 +64,30 @@ async function performFetch({ url, method = 'GET', headers = {}, body = null }) 
     text,
     responseHeaders: Object.fromEntries([...res.headers.entries()])
   };
+}
+
+async function performFetch({ url, method = 'GET', headers = {}, body = null }) {
+  const opts = { method, headers, cache: 'no-store' };
+  if (body != null) opts.body = body;
+  try {
+    return await responseObject(await fetch(url, opts));
+  } catch (e) {
+    return { ok: false, networkError: true, status: 0, statusText: '', data: null, text: String(e?.message || e) };
+  }
+}
+
+async function performUpload({ url, headers = {}, fileName = 'image.png', mime = 'application/octet-stream', bytes }) {
+  try {
+    const safeHeaders = { ...headers };
+    delete safeHeaders['content-type'];
+    delete safeHeaders['Content-Type'];
+    const raw = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const form = new FormData();
+    form.append('upload', new Blob([raw], { type: mime }), fileName);
+    return await responseObject(await fetch(url, { method: 'POST', headers: safeHeaders, body: form, cache: 'no-store' }));
+  } catch (e) {
+    return { ok: false, networkError: true, status: 0, statusText: '', data: null, text: String(e?.message || e) };
+  }
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -92,6 +107,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'api:fetch') {
     performFetch(msg.request).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'api:upload') {
+    performUpload(msg.request).then(sendResponse);
     return true;
   }
 
