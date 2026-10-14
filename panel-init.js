@@ -13,7 +13,7 @@ async function persistConfig() {
 }
 
 function bind() {
-  $('texFile').addEventListener('change', async e => { await fileChanged(e.target.files?.[0]); });
+  $('texFile').addEventListener('change', async e => { await safe(() => fileChanged(e.target.files?.[0])); });
   $('analyze').addEventListener('click', () => safe(analyzeLatex));
   $('simulate').addEventListener('click', () => safe(simulate));
   $('inject').addEventListener('click', () => safe(inject));
@@ -22,7 +22,18 @@ function bind() {
   $('detectSession').addEventListener('click', () => safe(detectSession));
   $('loadPortalData').addEventListener('click', () => safe(loadPortalData));
   $('clearFile').addEventListener('click', () => {
-    state.latex = ''; state.fileName = null; state.parsed = []; $('texFile').value = ''; $('preview').innerHTML = 'Analise um arquivo .tex para visualizar as questões.'; $('preview').className = 'preview empty'; $('analysisSummary').textContent = 'Nenhum arquivo analisado.'; $('questionCount').textContent = '0 questões';
+    state.latex = '';
+    state.docxPackage = null;
+    state.sourceType = 'tex';
+    state.sourceWarnings = [];
+    state.sourceMedia = [];
+    state.fileName = null;
+    state.parsed = [];
+    $('texFile').value = '';
+    $('preview').innerHTML = 'Analise um arquivo .tex ou .docx para visualizar as questões.';
+    $('preview').className = 'preview empty';
+    $('analysisSummary').textContent = 'Nenhum arquivo analisado.';
+    $('questionCount').textContent = '0 questões';
   });
   $('copyLog').addEventListener('click', async () => { await navigator.clipboard.writeText($('log').textContent); log('Log copiado.', 'ok'); });
   document.querySelectorAll('.advanced input, #sectionName').forEach(el => el.addEventListener('change', persistConfig));
@@ -34,11 +45,15 @@ async function safe(fn) {
 }
 
 (async function init() {
+  state.sourceType = 'tex';
+  state.docxPackage = null;
+  state.sourceWarnings = [];
+  state.sourceMedia = [];
   populateDefaults();
   await loadPersistedConfig();
   rebuildSelectors();
   bind();
-  log('Injector carregado. Para começar: abra o E-Class, detecte a sessão e selecione um .tex.');
+  log('Injector carregado. Para começar: abra o E-Class, detecte a sessão e selecione um .tex ou .docx.');
   await restorePendingAssessment();
   await detectSession();
 })();
