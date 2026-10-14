@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>E-Class Prova Injector</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>E-Class Prova Injector</h1>
+      <p>LaTeX → questões → prova no E-Class</p>
+    </div>
+    <span id="version">v0.1.1</span>
+  </header>
+
+  <main>
+    <section class="card session-card">
+      <div class="row space">
+        <div>
+          <h2>Sessão</h2>
+          <div id="sessionStatus" class="status neutral">Não verificada</div>
+        </div>
+        <button id="detectSession" class="secondary">Detectar sessão</button>
+      </div>
+      <p class="hint">Abra o E-Class normalmente antes. O token é mantido apenas em memória e não é salvo pela extensão.</p>
+    </section>
+
+    <section class="card">
+      <h2>1. Arquivo LaTeX</h2>
+      <label class="filebox">
+        <span>Selecionar arquivo .tex</span>
+        <input id="texFile" type="file" accept=".tex,text/x-tex,text/plain">
+      </label>
+      <div class="grid2">
+        <label>Seção da prova
+          <input id="sectionName" value="MATEMÁTICA">
+        </label>
+        <label>Título no E-Class
+          <input id="title" value="TESTE INJECTOR - APAGAR">
+        </label>
+      </div>
+      <div class="row">
+        <button id="analyze" class="primary">Analisar LaTeX</button>
+        <button id="clearFile" class="ghost">Limpar</button>
+      </div>
+      <div id="analysisSummary" class="summary">Nenhum arquivo analisado.</div>
+    </section>
+
+    <section class="card">
+      <div class="row space">
+        <h2>2. Destino</h2>
+        <button id="loadPortalData" class="secondary">Carregar do portal</button>
+      </div>
+      <div class="grid2">
+        <label>Disciplina
+          <select id="subject"></select>
+        </label>
+        <label>Bimestre
+          <select id="term"></select>
+        </label>
+        <label>Data de início
+          <input id="startDate" type="date">
+        </label>
+        <label>Data de resultado
+          <input id="resultDate" type="date">
+        </label>
+      </div>
+      <label class="block">Turmas</label>
+      <div id="classes" class="checks"></div>
+    </section>
+
+    <details class="card">
+      <summary>Configuração avançada</summary>
+      <div class="grid3 advanced">
+        <label>Ano <input id="academicYear" type="number"></label>
+        <label>Entidade <input id="entityId" type="number"></label>
+        <label>Perfil <input id="profileId" type="number"></label>
+        <label>Associação <input id="association" type="number"></label>
+        <label>Divisão <input id="division" type="number"></label>
+        <label>União <input id="union" type="number"></label>
+        <label>Editora <input id="publisher" type="number"></label>
+        <label>Nível <input id="levelId" type="number"></label>
+        <label>País <input id="countryId" type="number"></label>
+      </div>
+      <label>Nome da entidade
+        <input id="entityName">
+      </label>
+      <label>Token manual (opcional; não é salvo)
+        <input id="manualToken" type="password" autocomplete="off" placeholder="Bearer ... ou apenas o JWT">
+      </label>
+    </details>
+
+    <section class="card">
+      <h2>3. Validar e criar</h2>
+      <label class="toggle"><input id="dryRun" type="checkbox" checked> <strong>DRY RUN</strong> — não grava nada</label>
+      <label class="toggle"><input id="onlyQuestions" type="checkbox"> Criar somente as questões, sem criar a prova</label>
+      <div class="row wrap">
+        <button id="simulate" class="secondary">Simular payload</button>
+        <button id="inject" class="danger">Criar no E-Class</button>
+        <button id="retryAssessment" class="ghost" disabled>Reenviar só a prova</button>
+        <button id="clearPending" class="ghost" disabled>Limpar pendência</button>
+      </div>
+      <div id="progressWrap" class="progress-wrap hidden">
+        <div id="progressBar" class="progress"></div>
+        <div id="progressText"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row space">
+        <h2>Prévia</h2>
+        <span id="questionCount" class="pill">0 questões</span>
+      </div>
+      <div id="preview" class="preview empty">Analise um arquivo .tex para visualizar as questões.</div>
+    </section>
+
+    <section class="card">
+      <div class="row space">
+        <h2>Log</h2>
+        <button id="copyLog" class="ghost small">Copiar</button>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="parser.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>
