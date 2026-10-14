@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "E-Class Prova Injector",
-  "version": "0.2.0",
-  "description": "Importa provas em LaTeX ou Word (.docx) e cria questões/avaliações no E-Class Prova.",
+  "version": "0.3.0",
+  "description": "Importa provas em LaTeX ou Word, incluindo questões abertas e imagens, e exporta gabarito/turmas para o corretor OMR.",
   "permissions": [
     "storage",
     "scripting",
