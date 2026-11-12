@@ -53,6 +53,7 @@ async function fileChanged(file) {
   state.fileName = file?.name || null;
   state.parsed = [];
   state.figureBindings = {};
+  state.imageImportGeneration = (state.imageImportGeneration || 0) + 1;
   state.latex = file ? await file.text() : '';
   $('preview').textContent = 'Clique “Analisar LaTeX” para atualizar a prévia.';
   $('preview').classList.add('empty');
