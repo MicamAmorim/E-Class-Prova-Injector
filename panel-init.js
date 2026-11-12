@@ -24,6 +24,7 @@ function bind() {
   $('simulate').addEventListener('click', () => safe(simulate));
   $('inject').addEventListener('click', () => safe(inject));
   $('retryAssessment').addEventListener('click', () => safe(retryAssessment));
+  $('inspectPending').addEventListener('click', () => safe(inspectPendingAssessment));
   $('clearPending').addEventListener('click', () => safe(clearPendingAssessment));
   $('detectSession').addEventListener('click', () => safe(detectSession));
   $('loadPortalData').addEventListener('click', () => safe(loadPortalData));
