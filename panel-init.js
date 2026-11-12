@@ -10,7 +10,7 @@ async function loadPersistedConfig() {
 async function persistConfig() {
   const o = {};
   for (const id of ['academicYear','association','division','entityId','profileId','publisher','union','entityName','levelId','countryId','sectionName']) o[id] = $(id)?.value;
-  if ($('studentAudienceTemplate').value.trim()) o.studentAudienceTemplate = $('studentAudienceTemplate').value.trim();
+  o.studentAudienceTemplate = $('studentAudienceTemplate').value.trim();
   await chrome.storage.local.set({ eciConfig: o });
 }
 
@@ -24,7 +24,7 @@ function bind() {
   $('detectSession').addEventListener('click', () => safe(detectSession));
   $('loadPortalData').addEventListener('click', () => safe(loadPortalData));
   $('clearFile').addEventListener('click', () => {
-    state.latex = ''; state.fileName = null; state.parsed = []; state.figureBindings = {}; $('texFile').value = ''; $('preview').innerHTML = 'Analise um arquivo .tex para visualizar as questões.'; $('preview').className = 'preview empty'; $('analysisSummary').textContent = 'Nenhum arquivo analisado.'; $('questionCount').textContent = '0 questões';
+    state.latex = ''; state.fileName = null; state.parsed = []; state.figureBindings = {}; state.macroMap = new Map(); $('texFile').value = ''; $('preview').innerHTML = 'Analise um arquivo .tex para visualizar as questões.'; $('preview').className = 'preview empty'; $('analysisSummary').textContent = 'Nenhum arquivo analisado.'; $('questionCount').textContent = '0 questões';
   });
   enhancementsBind();
   $('copyLog').addEventListener('click', async () => { await navigator.clipboard.writeText($('log').textContent); log('Log copiado.', 'ok'); });
