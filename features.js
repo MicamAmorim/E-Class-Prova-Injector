@@ -332,6 +332,10 @@
         return { valid: false, reason: 'Existem ' + n +
           ' questões pendentes de uma disciplina não atribuída (' + id + ').' };
       }
+      if (assigned.some(a => !a.limitKnown)) {
+        return { valid: false, reason: 'Não há cota confirmada para a disciplina ' +
+          id + ' das questões pendentes.' };
+      }
       if (!assigned.some(a => a.limit == null)) {
         const max = assigned.reduce((sum, a) => sum + Number(a.limit || 0), 0);
         const linked = (detail.questoes || []).filter(q =>
