@@ -1,5 +1,5 @@
 async function simulate() {
-  analyzeLatex();
+  await analyzeLatex();
   const c = formConfig();
   validate(c);
   const payloads = [];
