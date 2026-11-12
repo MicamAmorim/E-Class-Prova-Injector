@@ -131,7 +131,8 @@ function formConfig() {
     startDate: $('startDate').value,
     resultDate: $('resultDate').value,
     dryRun: $('dryRun').checked,
-    onlyQuestions: $('onlyQuestions').checked
+    onlyQuestions: $('onlyQuestions').checked,
+    ...enhancementsFormConfig()
   };
 }
 
