@@ -225,10 +225,18 @@ async function prepareExistingUpdate(uuid) {
   if (newIds.length && newIds.every(id => present.has(id))) return { alreadyApplied: true, payload: detail };
   await portalCurrentUserId().catch(error =>
     log('Não foi possível confirmar identidade na recuperação: ' + assessmentErrorBrief(error), 'warn'));
-  assertExistingQuestionAccess(detail, {
+  const access = assertExistingQuestionAccess(detail, {
     questionCount: newIds.filter(id => !present.has(id)).length,
     recovery: true
   });
+  if (access.rights.isCoauthor) {
+    const quota = EClassFeatures.verifyPendingCoauthorSubjects(
+      detail, state.currentPortalUserId, state.createdQuestions);
+    if (!quota.valid) {
+      throw new Error('Reenvio da aplicação bloqueado: ' + quota.reason +
+        ' As questões existentes foram preservadas; verifique o vínculo pendente sem gravar.');
+    }
+  }
   const c = formConfig();
   const payload = EClassFeatures.portalUpdatePayload(detail, state.createdQuestions, c, weights);
   return { alreadyApplied: false, payload };
