@@ -78,6 +78,7 @@ async function persistPendingAssessment() {
     await chrome.storage.local.remove('eciPendingAssessment');
     $('retryAssessment').disabled = true;
     $('clearPending').disabled = true;
+    $('inspectPending')?.setAttribute('disabled', '');
     return;
   }
   await chrome.storage.local.set({
@@ -91,6 +92,7 @@ async function persistPendingAssessment() {
   });
   $('retryAssessment').disabled = false;
   $('clearPending').disabled = false;
+  if ($('inspectPending')) $('inspectPending').disabled = state.pendingOperation?.type !== 'update';
 }
 
 async function restorePendingAssessment() {
@@ -101,6 +103,7 @@ async function restorePendingAssessment() {
   state.pendingOperation = eciPendingAssessment.pendingOperation || { type: 'create', method: 'POST', url: API.assessment };
   $('retryAssessment').disabled = false;
   $('clearPending').disabled = false;
+  if ($('inspectPending')) $('inspectPending').disabled = state.pendingOperation?.type !== 'update';
   const when = eciPendingAssessment.savedAt ? new Date(eciPendingAssessment.savedAt).toLocaleString() : 'data desconhecida';
   log(`Pendência restaurada: ${state.createdQuestions.length} questão(ões) criadas; ${state.pendingOperation.type === 'update' ? 'atualização de prova existente' : 'criação de prova'} ainda pendente. Salva em ${when}.`, 'warn');
   return true;
@@ -113,6 +116,8 @@ async function clearPendingAssessment() {
     await chrome.storage.local.remove('eciPendingAssessment');
     $('retryAssessment').disabled = true;
     $('clearPending').disabled = true;
+  if ($('inspectPending')) $('inspectPending').disabled = true;
+    if ($('inspectPending')) $('inspectPending').disabled = true;
     return;
   }
   const ok = confirm(`Remover da extensão a pendência de “${title}”?\n\nIsso NÃO apaga as ${count} questão(ões) já criadas no E-Class.`);
@@ -123,6 +128,7 @@ async function clearPendingAssessment() {
   await chrome.storage.local.remove('eciPendingAssessment');
   $('retryAssessment').disabled = true;
   $('clearPending').disabled = true;
+  if ($('inspectPending')) $('inspectPending').disabled = true;
   log('Pendência local removida. As questões já criadas no E-Class não foram apagadas.', 'warn');
 }
 
@@ -209,6 +215,7 @@ async function finishAssessmentWrite(c, response, operation) {
   state.pendingOperation = null;
   $('retryAssessment').disabled = true;
   $('clearPending').disabled = true;
+  if ($('inspectPending')) $('inspectPending').disabled = true;
   setProgress(1, 1, 'Concluído');
   log(operation.type === 'update' ? 'QUESTÕES ADICIONADAS À PROVA.' : 'PROVA CRIADA COM SUCESSO.', 'ok');
   alert(operation.type === 'update' ?
@@ -327,6 +334,34 @@ async function inject() {
     if (!state.pendingOperation) await saveRunHistory('question_failed', c, e);
     throw e;
   }
+}
+
+async function inspectPendingAssessment() {
+  const operation = state.pendingOperation;
+  if (operation?.type !== 'update' || !state.createdQuestions.length) {
+    throw new Error('Não há questões pendentes de vinculação a uma prova existente.');
+  }
+  const detail = await fetchExistingAssessment(operation.id);
+  const identifiers = new Set(detail.questoes.map(q => EClassFeatures.questionId(q)));
+  const pending = [...new Set(expectedQuestionIds())];
+  const linked = pending.filter(uuid => identifiers.has(uuid));
+  const missing = pending.filter(uuid => !identifiers.has(uuid));
+  const subjects = new Map();
+  for (const question of state.createdQuestions) {
+    const key = String(question.padrao_disciplina?.descricao || question.padrao_disciplina_id || 'desconhecida');
+    subjects.set(key, (subjects.get(key) || 0) + 1);
+  }
+  const stateLabel = linked.length + '/' + pending.length +
+    ' questão(ões) pendente(s) vinculada(s) à avaliação.';
+  const text = stateLabel +
+    (missing.length ? ' Restam ' + missing.length +
+      ' já criada(s), mas ainda não vinculada(s). NÃO use “Adicionar questões” para recriá-las.' :
+      ' Todas aparecem na avaliação; não é necessário repetir a vinculação.') +
+    ' Distribuição das questões criadas: ' +
+    [...subjects].map(([subject, count]) => subject + ': ' + count).join(', ') + '.';
+  $('pendingInspectionStatus').textContent = text;
+  log('Diagnóstico sem gravação: ' + text, missing.length ? 'warn' : 'ok');
+  return { linked: linked.length, total: pending.length, missing: missing.length };
 }
 
 async function retryAssessment() {
