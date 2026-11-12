@@ -9,6 +9,7 @@ state.existingTarget = null;
 state.existingLookupSeq = 0;
 state.savedNewClasses = null;
 state.lastExistingMode = false;
+state.currentPortalUserId = null;
 
 function questionImages(q) {
   return state.figureBindings[q.number] || (state.figureBindings[q.number] = {});
@@ -174,6 +175,18 @@ function renderStudentRoster() {
     'O retorno de turmas não trouxe matrículas individuais. Informe os IDs abaixo.';
 }
 
+async function portalCurrentUserId() {
+  const result = await apiFetch(API.currentUser, { headers: portalHeaders(false) });
+  const user = result && result.data && typeof result.data === 'object' ?
+    result.data : result;
+  const id = Number(user?.usuario_id ?? user?.user_id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error('A identidade da sessão não veio no retorno de dados-usuario.');
+  }
+  state.currentPortalUserId = id; // memória somente; nunca em chrome.storage
+  return id;
+}
+
 function renderExistingAudience() {
   const existing = $('useExistingAssessment').checked;
   const selected = state.existingTarget;
@@ -186,7 +199,7 @@ function renderExistingAudience() {
   // a prova existente não puder ser confirmada. O botão de reenviar
   // continua independente, preservando operações pendentes.
   const canAdd = isConfirmed && !selected.permissions.active &&
-    (selected.permissions.canEditQuestions || selected.permissions.isOwner);
+    selected.permissions.canEditQuestions;
   $('inject').disabled = existing && !canAdd;
 
   for (const box of boxes) {
@@ -231,9 +244,18 @@ function renderExistingAudience() {
       perm.canChangeClasses ?
         'O portal informou permissão sobre público-alvo, mas alterações de turma permanecem desativadas até validar o contrato de escrita.' :
         'O retorno não confirma permissão para alterar turmas; a seleção permanece bloqueada.') +
-    ((!perm.canEditQuestions && !perm.isOwner) ?
-      ' Adição de novas questões bloqueada: permissão não confirmada.' :
-      ' A adição de questões continua experimental; nenhum destinatário será alterado.') +
+    (perm.isCoauthor ?
+      ' Coautoria reconhecida para esta conta. ' +
+      perm.coauthor.assignments.map(x =>
+        x.subjectName + ': ' + (x.limit == null ? 'sem limite' : x.limit + ' questão(ões)') +
+        (x.deadline ? ' · até ' + x.deadline.slice(0, 10).split('-').reverse().join('/') : '')
+      ).join('; ') + '. ' +
+      (perm.coauthor.remaining == null ? '' :
+        'Vagas não utilizadas na avaliação: ' + perm.coauthor.remaining + '. ') :
+      '') +
+    (!perm.canEditQuestions ?
+      ' Adição de novas questões bloqueada: autorização não confirmada.' :
+      ' A edição das questões é permitida pela atribuição; as turmas permanecem protegidas.') +
     (selected.audience.hasIndividuals ? ' Público-alvo também inclui destinatários individuais.' : '');
 }
 
@@ -256,7 +278,17 @@ async function loadExistingAudience() {
     if (current !== state.existingLookupSeq || !$('useExistingAssessment').checked ||
         targetAssessmentId() !== id) return;
     const audience = EClassFeatures.assessmentAudience(detail);
-    const permissions = EClassFeatures.assessmentPermissions(detail);
+    let userId = null;
+    try {
+      userId = await portalCurrentUserId();
+    } catch (error) {
+      state.currentPortalUserId = null;
+      log('Não foi possível conferir o usuário autenticado para coautoria (' +
+        assessmentErrorBrief(error) + ').', 'warn');
+    }
+    if (current !== state.existingLookupSeq || !$('useExistingAssessment').checked ||
+        targetAssessmentId() !== id) return;
+    const permissions = EClassFeatures.assessmentPermissions(detail, userId);
     state.existingTarget = { id, audience, permissions };
     renderExistingAudience();
     if (!audience.verified) {
