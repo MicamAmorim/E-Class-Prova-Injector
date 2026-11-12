@@ -13,27 +13,27 @@ function questionImages(q) {
 function renderFigurePreview(q, card) {
   const images = questionImages(q);
   function renderFragment(el, input) {
-    const matches = [...String(input).matchAll(/\bTAGFIGURAAQUI(?:[_-]?\d+)?\b/g)];
+    const refs = EClassImageImport.imageReferences(input);
     el.replaceChildren();
     let start = 0;
-    for (const match of matches) {
-      el.appendChild(document.createTextNode(input.slice(start, match.index)));
-      const src = images[match[0]];
+    for (const ref of refs) {
+      el.appendChild(document.createTextNode(String(input).slice(start, ref.start)));
+      const src = images[ref.key];
       if (src) {
         const img = document.createElement('img');
         img.src = src;
-        img.alt = 'Figura ' + match[0] + ' da questão ' + q.number;
+        img.alt = 'Figura ' + ref.label + ' da questão ' + q.number;
         img.className = 'inline-figure';
         el.appendChild(img);
       } else {
         const mark = document.createElement('strong');
         mark.className = 'missing-figure';
-        mark.textContent = '[' + match[0] + ': figura pendente]';
+        mark.textContent = '[' + ref.label + ': figura pendente]';
         el.appendChild(mark);
       }
-      start = match.index + match[0].length;
+      start = ref.end;
     }
-    el.appendChild(document.createTextNode(input.slice(start)));
+    el.appendChild(document.createTextNode(String(input).slice(start)));
   }
 
   function refresh() {
@@ -41,53 +41,53 @@ function renderFigurePreview(q, card) {
     card.querySelectorAll('ol li').forEach((li, i) => renderFragment(li, q.choices[i]));
   }
 
-  const tags = EClassFeatures.figureTags(q);
-  if (tags.length) {
+  const references = EClassImageImport.allImageReferences(q);
+  if (references.length) {
     const box = document.createElement('div');
     box.className = 'figures-box';
     const caption = document.createElement('p');
     caption.className = 'hint';
-    caption.textContent = 'Associe cada marcador a uma imagem PNG, JPG, WEBP ou GIF. Você também pode usar uma URL HTTPS hospedada.';
+    caption.textContent = 'Imagens encontradas na pasta são carregadas automaticamente. Você pode substituir qualquer uma por arquivo manual ou URL HTTPS.';
     box.appendChild(caption);
-    for (const tag of tags) {
+    for (const ref of references) {
+      const tag = ref.key;
       const row = document.createElement('div');
       row.className = 'figure-row';
       const heading = document.createElement('strong');
-      heading.textContent = tag;
+      heading.textContent = ref.label;
+      const status = document.createElement('span');
+      status.className = 'hint';
       const file = document.createElement('input');
       file.type = 'file';
       file.accept = 'image/png,image/jpeg,image/webp,image/gif';
-      file.setAttribute('aria-label', 'Enviar figura para ' + tag + ' da questão ' + q.number);
+      file.setAttribute('aria-label', 'Enviar figura para ' + ref.label + ' da questão ' + q.number);
       const url = document.createElement('input');
       url.type = 'url';
       url.placeholder = 'ou URL HTTPS da figura';
-      url.setAttribute('aria-label', 'URL para ' + tag + ' da questão ' + q.number);
+      url.setAttribute('aria-label', 'URL para ' + ref.label + ' da questão ' + q.number);
       if (images[tag]?.startsWith('https://')) url.value = images[tag];
+
+      function updateStatus() {
+        status.textContent = images[tag] ? 'Imagem vinculada (pode substituir)' : 'Aguardando imagem';
+      }
+
       file.addEventListener('change', async () => {
         const selected = file.files && file.files[0];
         if (!selected) return;
-        const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-        if (!allowed.includes(selected.type)) {
+        try {
+          const source = await localImageData({
+            file: selected,
+            relativePath: 'manual/' + crypto.randomUUID() + '/' + selected.name
+          });
+          images[tag] = source;
+          url.value = '';
+          updateStatus();
+          refresh();
+          log('Q' + q.number + ': imagem manual associada a ' + ref.label + '.', 'ok');
+        } catch (error) {
+          log('Q' + q.number + ': ' + error.message, 'error');
           file.value = '';
-          log('Q' + q.number + ': formato de imagem não permitido.', 'error');
-          return;
         }
-        if (selected.size > 1500000) {
-          file.value = '';
-          log('Q' + q.number + ': imagem maior que 1,5 MB; reduza o tamanho antes do envio.', 'error');
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === 'string') {
-            images[tag] = reader.result;
-            url.value = '';
-            refresh();
-            log('Q' + q.number + ': figura associada a ' + tag + '.', 'ok');
-          }
-        };
-        reader.onerror = () => log('Falha na leitura da imagem.', 'error');
-        reader.readAsDataURL(selected);
       });
       url.addEventListener('change', () => {
         const value = url.value.trim();
@@ -97,6 +97,7 @@ function renderFigurePreview(q, card) {
         }
         if (value) images[tag] = value;
         else delete images[tag];
+        updateStatus();
         refresh();
       });
       const remove = document.createElement('button');
@@ -107,9 +108,11 @@ function renderFigurePreview(q, card) {
         delete images[tag];
         file.value = '';
         url.value = '';
+        updateStatus();
         refresh();
       });
-      row.append(heading, file, url, remove);
+      updateStatus();
+      row.append(heading, status, file, url, remove);
       box.appendChild(row);
     }
     card.appendChild(box);
@@ -242,8 +245,10 @@ async function loadExistingAssessments() {
 
 function validateEnhancements(c) {
   for (const q of state.parsed) {
-    for (const tag of EClassFeatures.figureTags(q)) {
-      EClassFeatures.replaceFigureTags(tag, questionImages(q), q.number);
+    const bindings = questionImages(q);
+    for (const ref of EClassImageImport.allImageReferences(q)) {
+      if (!bindings[ref.key]) throw new Error('Q' + q.number + ': imagem pendente em ' + ref.label + '.');
+      EClassImageImport.replaceImageTokens('@@ECIIMAGE0@@', [ref], bindings, q.number);
     }
   }
   const totalInline = Object.values(state.figureBindings).flatMap(group => Object.values(group))
