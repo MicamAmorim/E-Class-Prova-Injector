@@ -302,6 +302,43 @@
     };
   }
 
+  function verifyPendingCoauthorSubjects(detail, userId, created) {
+    const grant = coauthorGrant(detail, userId);
+    if (!grant.valid) return { valid: false, reason: 'Coautoria não confirmada.' };
+    const linkedIds = new Set((detail.questoes || []).map(questionId));
+    const pending = (created || []).filter(q => !linkedIds.has(questionId(q)));
+    const counts = new Map();
+    for (const q of pending) {
+      const raw = q.padrao_disciplina_id ?? q.dadosGerais?.padrao_disciplina_id ??
+        q.questao?.padrao_disciplina_id ?? q.padrao_disciplina?.id;
+      const id = Number(raw);
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        return { valid: false, reason: 'A disciplina das questões já criadas não veio no retorno da API. ' +
+          'Não é seguro reenviar o PUT sem verificar a vinculação e as cotas.' };
+      }
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    for (const [id, n] of counts) {
+      const assigned = grant.assignments.filter(a => Number(a.subjectId) === id);
+      if (!assigned.length) {
+        return { valid: false, reason: 'Existem ' + n +
+          ' questões pendentes de uma disciplina não atribuída (' + id + ').' };
+      }
+      if (!assigned.some(a => a.limit == null)) {
+        const max = assigned.reduce((sum, a) => sum + Number(a.limit || 0), 0);
+        const linked = (detail.questoes || []).filter(q =>
+          Number(q?.criado_por) === Number(userId) &&
+          Number(q?.padrao_disciplina_id) === id).length;
+        if (linked + n > max) {
+          return { valid: false, reason: 'A pendência ultrapassa a cota da disciplina ' +
+            id + ': ' + n + ' questão(ões) ainda não vinculada(s) e ' +
+            linked + ' já vinculada(s), mas o limite é ' + max + '.' };
+        }
+      }
+    }
+    return { valid: true, counts: Object.fromEntries(counts) };
+  }
+
   function assessmentPermissions(detail, userId, now = new Date()) {
     const app = detail?.aplicacao || detail || {};
     const exam = detail?.avaliacao || app.avaliacao || {};
@@ -494,6 +531,7 @@
     studentsFromClasses, makeIndividualAudience, questionId,
     assessmentListPage, applicationCandidates,
     assessmentAudience, assessmentPermissions, assessmentCalendar,
-    coauthorGrant, coauthorSubjectPlan, existingSubjectPlan, portalUpdatePayload, assertUnchangedAudience
+    coauthorGrant, coauthorSubjectPlan, existingSubjectPlan,
+    verifyPendingCoauthorSubjects, portalUpdatePayload, assertUnchangedAudience
   };
 });
