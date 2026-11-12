@@ -56,7 +56,13 @@
 
   function withinDays(record, days, now = new Date()) {
     if (!record.date) return false;
-    const parsed = new Date(record.date.replace(' ', 'T'));
+    let parsed;
+    const br = String(record.date).match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+    if (br) {
+      parsed = new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]), Number(br[4] || 0), Number(br[5] || 0));
+    } else {
+      parsed = new Date(record.date.replace(' ', 'T'));
+    }
     if (Number.isNaN(parsed.getTime())) return false;
     const delta = now.getTime() - parsed.getTime();
     return delta >= 0 && delta <= days * 86400000;
