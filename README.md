@@ -4,6 +4,30 @@ Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questõe
 
 > **Protótipo experimental.** Use primeiro com prova de teste. Não há rollback automático para questões já criadas.
 
+## Pacote completo para gerar provas com figuras em qualquer LLM
+
+Agora o Git inclui um **exemplo autocontido** com 1 arquivo LaTeX, **5 imagens PNG reais** e documentação de importação. Diferentemente dos exemplos antigos na raiz (que servem de referência textual), o pacote contém todos os arquivos binários mencionados no `.tex`.
+
+- **[Abrir modelo pronto](templates/prova_com_figuras/README.md):** `prova_exemplo.tex` com 4 questões, gráficos no enunciado, figuras nas alternativas, fórmulas e gabarito; imagens PNG organizadas em subpastas.
+- **[Prompt reutilizável para ChatGPT, Claude, Gemini e outros LLMs](docs/PROMPT_GERAR_PROVA_COMPATIVEL.md):** contrato de geração do `.tex`, pasta e figuras reais, convenção de caminhos, verificações e formato de entrega.
+- **[Teste automático do pacote](tests/template-package.test.js):** verifica assinatura PNG, tamanho, resolução de todos os caminhos de imagem, parser, alternativas e gabarito.
+
+```text
+templates/prova_com_figuras/
+├── prova_exemplo.tex
+├── README.md
+├── Q3_TAGFIGURAAQUI.png
+├── figuras/grafico_frequencias.png
+└── alternativas/
+    ├── triangulo_retangulo.png
+    ├── triangulo_acutangulo.png
+    └── triangulo_obtusangulo.png
+```
+
+Para usar no Edge, **extraia qualquer ZIP primeiro** e selecione a **pasta inteira** em **Selecionar pasta da prova (.tex + imagens)**. A estrutura de diretórios deve permanecer igual à descrita no `.tex`.
+
+> **Aceitação de figuras:** o pacote é validado para a **resolução local de imagens do Injector**. O envio do HTML resultante ao E-Class ainda exige teste real autenticado: o backend pode não aceitar URLs `data:image`. O exemplo **não** comprova que a prova ilustrada já tenha sido publicada com sucesso.
+
 ## Instalação no Edge
 
 1. Extraia o ZIP em uma pasta permanente, por exemplo `Documentos\\EClass-Injector`.
