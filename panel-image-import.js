@@ -6,6 +6,7 @@ state.imageFolderRecords = [];
 state.imageTexRecords = [];
 state.texRelativePath = '';
 state.imageDataCache = new Map();
+state.imageImportGeneration = 0;
 
 function clearFolderSelection() {
   state.imageFolderRecords = [];
@@ -52,6 +53,7 @@ async function localImageData(record) {
 
 async function autoBindImageFiles() {
   const records = state.imageFolderRecords;
+  const generation = state.imageImportGeneration;
   if (!state.parsed.length || !records.length) {
     const count = state.parsed.reduce((n, q) =>
       n + EClassImageImport.allImageReferences(q).length, 0);
@@ -73,7 +75,9 @@ async function autoBindImageFiles() {
         continue;
       }
       try {
-        bindings[ref.key] = await localImageData(result.record);
+        const data = await localImageData(result.record);
+        if (generation !== state.imageImportGeneration) return;
+        bindings[ref.key] = data;
         imported++;
         log('Q' + q.number + ': imagem importada de ' + result.record.relativePath + ' para ' + ref.label, 'ok');
       } catch (error) {
