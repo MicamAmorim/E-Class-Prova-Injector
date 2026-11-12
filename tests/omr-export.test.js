@@ -134,3 +134,42 @@ test('painel mantém funcionalidades anteriores e carrega exportador antes do bi
   assert.ok(scripts.indexOf('panel-omr.js') < scripts.indexOf('panel-init.js'));
   new vm.Script(fs.readFileSync(path.join(root, 'panel-omr.js'), 'utf8'));
 });
+
+
+test('normaliza matrículas com múltiplas turmas da API do E-Class', () => {
+  const response = {
+    data: [
+      {
+        id: 100, name: 'Aluna Exemplo',
+        student_groups: [{ turma_id: 10 }, { turma_id: 20 }]
+      },
+      {
+        id: 200, nome: 'Aluno Exemplo',
+        group_id: 20
+      }
+    ]
+  };
+  assert.deepEqual(OMR.normalizeRoster(response), [
+    { classId: 10, id: '100', name: 'Aluna Exemplo' },
+    { classId: 20, id: '100', name: 'Aluna Exemplo' },
+    { classId: 20, id: '200', name: 'Aluno Exemplo' }
+  ]);
+  const pkg = OMR.buildPackage({
+    questions: questions(), classIds: [10,20],
+    classes: [{ id: 10, description: '1MA' }, { id: 20, description: '1MB' }],
+    students: OMR.normalizeRoster(response)
+  });
+  assert.equal(pkg.exam.classes.length, 2);
+  assert.equal(pkg.exam.classes[0].students.length, 1);
+  assert.equal(pkg.exam.classes[1].students.length, 2);
+});
+
+test('roster ausente ou retorno inesperado não impede exportação geral', () => {
+  assert.deepEqual(OMR.normalizeRoster({ message: 'Não disponível' }), []);
+  const pkg = OMR.buildPackage({
+    questions: questions(), classIds: [10],
+    students: OMR.normalizeRoster({ message: 'Não disponível' })
+  });
+  assert.equal(pkg.exam.mode, 'general');
+  assert.deepEqual(pkg.exam.classes, []);
+});
