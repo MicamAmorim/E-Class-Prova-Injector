@@ -1,4 +1,4 @@
-# E-Class Prova Injector — Edge v0.2.0
+# E-Class Prova Injector — Edge v0.2.1
 
 Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questões objetivas e gabarito, converte as fórmulas LaTeX usando o mesmo endpoint observado no E-Class e cria as questões / avaliação pelas APIs usadas pelo próprio portal.
 
@@ -18,7 +18,7 @@ Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questõe
 1. Entre normalmente no Portal Adventista e abra **E-Class Prova**.
 2. Clique no ícone da extensão e escolha **Abrir painel lateral**.
 3. Clique **Detectar sessão**. A extensão observa somente as requisições para os domínios do E-Class listados no `manifest.json`; o Bearer token fica apenas em memória e não é persistido.
-4. Selecione um arquivo `.tex`.
+4. **Preferencialmente selecione a pasta da prova**, contendo o `.tex` e suas figuras. A extensão associará automaticamente as figuras referenciadas, inclusive nas alternativas. Também é possível selecionar apenas o `.tex` e depois a pasta das imagens.
 5. Informe a seção (por padrão `MATEMÁTICA`) e clique **Analisar LaTeX**.
 6. Confira número de questões, fórmulas e gabarito.
 7. Clique **Carregar do portal** para atualizar turmas, bimestres e disciplinas.
@@ -54,7 +54,7 @@ Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questõe
 
 - somente questões objetivas;
 - TikZ é detectado e omitido com aviso;
-- `\\includegraphics` é detectado e omitido com aviso;
+- `\\includegraphics` é importado quando a imagem é encontrada na pasta selecionada ou associada manualmente; caso contrário, o envio é bloqueado até que a figura seja vinculada;
 - tabelas complexas são omitidas com aviso;
 - não há exclusão automática das questões se a criação da avaliação falhar;
 - a pendência de prova é persistida localmente até o reenvio funcionar ou você clicar em **Limpar pendência**;
@@ -134,3 +134,38 @@ node --test tests/*.test.js
 Os testes cobrem reconhecimento de marcadores, validação de imagens, público individual, listagem/filtragem, mesclagem idempotente de questões, preservação de dados da avaliação, bloqueio de provas ativas e carregamento/sintaxe dos scripts da extensão.
 
 **Importante:** estes são testes locais com objetos simulados; não certificam o contrato da API privada nem a aceitação de imagens embutidas. O modo **DRY RUN** continua sendo o fluxo recomendado antes de qualquer envio real.
+
+
+### 4. Importação automática de figuras (v0.2.1)
+
+**Modo recomendado:** clique **Selecionar pasta da prova (.tex + imagens)**, conceda acesso local pelo Edge e, se houver mais de um arquivo `.tex`, escolha a prova no seletor. O painel carrega a prova e associa as imagens encontradas. O seletor anterior de arquivo `.tex` permanece disponível para uso isolado.
+
+**Limitação do navegador:** por segurança, selecionar um único `.tex` não fornece à extensão o caminho completo nem autorização para ler a pasta onde ele está. É necessário selecionar a pasta explicitamente para importar as imagens automaticamente; ela pode conter só figuras quando o `.tex` já tiver sido selecionado.
+
+**Resolução de imagens:**
+
+- `\includegraphics[width=.5\linewidth]{figuras/grafico.png}`: procura o caminho relativo ao `.tex`, incluindo subpastas. Também aceita referência sem extensão e `\graphicspath{{figuras/}{imagens/}}`.
+- Se não houver caminho exato, procura o nome do arquivo apenas quando existe uma única correspondência na pasta autorizada.
+- Para marcadores `TAGFIGURAAQUI`, `TAGFIGURAAQUI_2` e similares, reconhece imagens com nomes como `Q2_TAGFIGURAAQUI.png`, `questao_2_TAGFIGURAAQUI_2.jpg` ou `TAGFIGURAAQUI.png`.
+- Se várias imagens puderem corresponder, nenhuma será escolhida automaticamente. Se um marcador não tiver arquivo identificável, a imagem fica pendente até a associação manual.
+
+**Imagens nas alternativas:** coloque `\includegraphics{alternativas/opcao-a.png}` e outras referências dentro de cada `\item` da lista de opções. Cada alternativa poderá usar uma figura diferente, e o painel permitirá trocá-la por upload manual ou URL HTTPS. Se usar marcadores em vez de `\includegraphics`, dê nomes de tags distintos a cada figura.
+
+Exemplo prático disponível em `exemplo_figuras_alternativas.tex`. Estrutura sugerida:
+
+```text
+MinhaProva/
+├── exemplo_figuras_alternativas.tex
+├── Q3_TAGFIGURAAQUI.png
+├── figuras/
+│   └── grafico-funcao.png
+└── alternativas/
+    ├── figura-a.jpg
+    ├── figura-b.jpg
+    ├── figura-c.jpg
+    └── figura-d.jpg
+```
+
+**Segurança e limites:** PNG, JPEG, WEBP e GIF; o arquivo precisa ter assinatura válida. Máximo de 1,5 MB por figura, e 3,5 MB de imagens base64 no total de cada execução. Só as imagens efetivamente referenciadas são lidas. Durante a análise, elas permanecem em memória e não são publicadas externamente. Para envio da prova, as imagens são inseridas no HTML como `data:image/...;base64` ou URL HTTPS.
+
+**Integração pendente:** não há confirmação, com sessão autenticada, de que o backend do E-Class aceite imagens `data:` em questões. Realize um envio de teste e confira a renderização antes de publicar provas reais.
