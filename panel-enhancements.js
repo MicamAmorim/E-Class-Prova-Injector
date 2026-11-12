@@ -399,9 +399,11 @@ function toggleModes() {
     state.existingLookupSeq++;
     state.existingTarget = null;
     const restore = new Set(state.savedNewClasses || []);
+    // Limpa opções de bimestre adicionadas apenas para exibir uma prova já
+    // criada, sem contaminar o formulário antigo de criação do zero.
+    rebuildSelectors();
     for (const el of document.querySelectorAll('.classCheck')) el.checked = restore.has(Number(el.value));
     for (const [field, value] of Object.entries(state.savedNewDestination || {})) {
-      if (field === 'term' && ![...$('term').options].some(o => o.value === value)) rebuildSelectors();
       $(field).value = value;
     }
     state.existingSubjectPlan = null;
