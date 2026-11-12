@@ -207,8 +207,10 @@ test('carregamento de uma aplicação desativa seleção de turmas e bloqueia ad
     source + '\nreturn {loadExistingAudience, renderExistingAudience};'
   )(
     state, id => ui[id], document, F,
-    { assessment: 'https://example.org/api/v1/aplicacao-avaliacao' },
+    { assessment: 'https://example.org/api/v1/aplicacao-avaliacao',
+      currentUser: 'https://example.org/api/v1/dados-usuario' },
     async url => {
+      if (url.endsWith('dados-usuario')) return { usuario_id: 999 };
       assert.match(url, /\/app-1$/);
       const d = existingDetail();
       return { data: {
@@ -254,7 +256,7 @@ test('GET de identificação da conta habilita o botão para coautor, sem destra
       data_limite: '2099-11-19 23:59:00',
       padrao_disciplina: { descricao: 'Investigação Matemática' } }
   ];
-  const state = { existingLookupSeq: 0, existingTarget: null, remote: {} };
+  const state = { existingLookupSeq: 0, existingTarget: null, remote: {}, parsed: [] };
   const source = fs.readFileSync(path.resolve(__dirname, '../panel-enhancements.js'), 'utf8');
   const controller = new Function('state','$','document','EClassFeatures',
     'API','apiFetch','portalHeaders','log',
