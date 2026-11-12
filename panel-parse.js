@@ -29,6 +29,7 @@ async function loadPortalData() {
   if (state.remote.classes[0]?.entidade?.nome) $('entityName').value = state.remote.classes[0].entidade.nome;
   rebuildSelectors();
   renderStudentRoster();
+  renderExistingAudience();
   log(`Portal carregado: ${state.remote.classes.length} turmas, ${state.remote.terms.length} períodos, ${state.remote.subjects.length} disciplinas.`, 'ok');
 }
 
