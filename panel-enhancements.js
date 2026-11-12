@@ -212,109 +212,188 @@ function targetAssessmentId() {
   return $('existingAssessmentId').value.trim() || $('existingAssessments').value;
 }
 
+function assessmentErrorBrief(error) {
+  const status = Number(error?.status) || 0;
+  const firstLine = String(error?.message || error || '').split('\n')[0];
+  if (status === 401 || status === 403) return 'HTTP ' + status + ' (sessão/permissão)';
+  if (status === 429) return 'HTTP 429 (limite de requisições)';
+  if (status) return 'HTTP ' + status;
+  return firstLine.replace(/https?:\/\/[^\s]+/g, '[endereço da API]').slice(0, 160);
+}
+
+function renderExistingAssessmentChoices(records, selectedId) {
+  const list = [...records.values()].sort((a, b) => {
+    // Datas de criação confirmadas primeiro, depois itens sem data confirmada.
+    if (Boolean(a.date) !== Boolean(b.date)) return a.date ? -1 : 1;
+    return String(b.date || b.scheduledDate || '').localeCompare(String(a.date || a.scheduledDate || ''));
+  });
+  $('existingAssessments').replaceChildren(new Option('Selecione uma prova', ''));
+  for (const rec of list) {
+    const date = rec.date ? new Date(rec.date.replace(' ', 'T')) : null;
+    const humanDate = date && !Number.isNaN(date.getTime()) ?
+      date.toLocaleDateString('pt-BR') : (rec.date ? rec.date.slice(0, 10) : '');
+    const note = rec.date ? 'criada em ' + humanDate :
+      'criação não verificada' + (rec.scheduledDate ? ' · aplicação ' + rec.scheduledDate.slice(0, 10) : '');
+    const title = rec.title + ' · ' + note +
+      (rec.active ? ' · ATIVA/ENCERRADA (edição bloqueada)' : '') +
+      (rec.historyOnly ? ' · histórico local' : '');
+    const option = new Option(title, rec.id);
+    option.disabled = Boolean(rec.active);
+    $('existingAssessments').add(option);
+    if (rec.id === selectedId && !rec.active) option.selected = true;
+  }
+  return list.length;
+}
+
 async function loadExistingAssessments() {
-  if (!tokenForRequest()) await detectSession();
-  if (!tokenForRequest()) throw new Error('Detecte sua sessão para consultar as provas.');
-  const days = Number($('assessmentDays').value);
-  if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('Use um período de 1 a 365 dias.');
-
-  const button = $('loadAssessments');
-  button.disabled = true;
   const status = $('assessmentListStatus');
-  const previousId = targetAssessmentId();
-  const c = formConfig();
-  const records = new Map();
-  let pagesLoaded = 0, totalReturned = 0, detailErrors = 0, withoutDate = 0;
-  let listError = null, truncated = false;
+  const button = $('loadAssessments');
+  const days = Number($('assessmentDays').value);
+  if (!Number.isInteger(days) || days < 1 || days > 365) {
+    status.textContent = 'Período inválido: informe de 1 a 365 dias.';
+    throw new Error(status.textContent);
+  }
 
+  button.disabled = true;
+  status.textContent = 'Iniciando consulta das avaliações...';
+  const selectedId = targetAssessmentId();
+  const records = new Map();
+  let pagesLoaded = 0, evaluationsFound = 0, detailErrors = 0;
+  let filteredOld = 0, unknownDates = 0, listError = null, stoppedForRateLimit = false;
+  let noApplicationCount = 0, truncated = false;
   try {
-    const collected = [];
+    if (!tokenForRequest()) {
+      await detectSession();
+      if (!tokenForRequest()) {
+        log('O token não foi encontrado. Tentando consulta SOMENTE DE LEITURA usando o contexto do portal; se houver HTTP 401/403, será necessário autenticar.', 'warn');
+      }
+    }
+    const config = formConfig();
+    const candidates = new Map();
+
+    // A listagem é GET /api/v1/avaliacao. Usamos apenas acesso de leitura:
+    // no HAR o cabeçalho Bearer pode não estar presente. Escrita continua
+    // exigindo autenticação e confirmação separadas.
     try {
-      // O HAR confirma GET /api/v1/avaliacao, com {data: {data: [], last_page}}.
       for (let page = 1; page <= 30; page++) {
-        status.textContent = 'Consultando página ' + page + ' de avaliações...';
-        const response = await apiFetch(API.assessmentList(c, page, 25), { headers: portalHeaders(false) });
+        status.textContent = 'Buscando avaliações no E-Class · página ' + page + '...';
+        const response = await apiFetch(API.assessmentList(config, page, 25), {
+          headers: portalHeaders(false, false)
+        });
         const result = EClassFeatures.assessmentListPage(response);
-        if (result.currentPage !== page) throw new Error('O servidor retornou uma página diferente da solicitada.');
+        if (result.currentPage !== page) {
+          throw new Error('A API retornou a página ' + result.currentPage + ' em vez da ' + page + '.');
+        }
         pagesLoaded++;
-        totalReturned = result.total;
-        collected.push(...EClassFeatures.applicationCandidates(result.rows));
+        evaluationsFound = result.total;
+        noApplicationCount += result.rows.filter(x => !Array.isArray(x.aplicacoes) || !x.aplicacoes.length).length;
+        for (const item of EClassFeatures.applicationCandidates(result.rows)) {
+          candidates.set(item.id, item);
+        }
         if (page >= result.lastPage) break;
         if (page === 30) truncated = true;
       }
-    } catch (e) {
-      listError = e;
-      log('Não foi possível concluir a consulta das avaliações: ' + e.message, 'warn');
+    } catch (error) {
+      listError = assessmentErrorBrief(error);
+      log('Listagem E-Class: ' + listError + '. Verifique a sessão, o ano e a entidade.', 'error');
     }
 
-    const candidates = [...new Map(collected.map(a => [a.id, a])).values()];
-    status.textContent = candidates.length + ' aplicações encontradas. Verificando datas de criação...';
+    // Primeiro renderizamos os itens que a API confirmou na LISTAGEM,
+    // independentemente da resposta do GET individual de cada aplicação.
+    for (const item of candidates.values()) {
+      const active = EClassFeatures.isAssessmentActive({
+        aplicacao: { status: item.status, encerrada: item.ended, tentativa_count: item.attempts },
+        avaliacao: {}
+      });
+      records.set(item.id, {
+        id: item.id, title: item.title,
+        scheduledDate: item.scheduledDate, date: '', active
+      });
+    }
+    renderExistingAssessmentChoices(records, selectedId);
 
-    // A resposta da lista não tem created_at. GET da aplicação retorna a
-    // data de criação e permite aplicar corretamente o filtro de N dias.
+    if (!listError && records.size) {
+      status.textContent = 'Encontrei ' + records.size + ' aplicações. Conferindo as datas de criação...';
+    }
+
+    // A lista não possui created_at. Conferimos as datas em lotes, mas uma
+    // falha de GET individual NÃO deve fazer a prova desaparecer do seletor.
+    // Sem created_at ela permanece identificada como "não verificada".
+    const ids = [...records.keys()];
     const batchSize = 4;
-    for (let i = 0; i < candidates.length; i += batchSize) {
-      const batch = candidates.slice(i, i + batchSize);
-      await Promise.all(batch.map(async candidate => {
+    for (let i = 0; i < ids.length; i += batchSize) {
+      if (stoppedForRateLimit) break;
+      const batch = ids.slice(i, i + batchSize);
+      await Promise.all(batch.map(async id => {
+        const rec = records.get(id);
+        if (!rec) return;
         try {
-          const response = await apiFetch(targetAssessmentUrl(candidate.id), { headers: portalHeaders(false) });
+          const response = await apiFetch(targetAssessmentUrl(id), {
+            headers: portalHeaders(false, false)
+          });
           const raw = response && response.data ? response.data : response;
-          if (String(raw?.uuid || '') !== candidate.id) throw new Error('O detalhe não corresponde à aplicação.');
+          if (String(raw?.uuid || '') !== id) throw new Error('UUID incompatível com a aplicação solicitada.');
           const date = raw.created_at || raw.data_criacao || '';
-          if (!date) { withoutDate++; return; }
-          const rec = {
-            id: candidate.id, title: candidate.title,
-            date: String(date), scheduledDate: candidate.scheduledDate,
-            active: EClassFeatures.isAssessmentActive(
-              EClassFeatures.detailPayload(response) || { aplicacao: raw, avaliacao: {} }
-            )
-          };
-          if (EClassFeatures.withinDays(rec, days)) records.set(rec.id, rec);
-        } catch (_) { detailErrors++; }
+          if (date && EClassFeatures.withinDays({ date: String(date) }, days)) {
+            rec.date = String(date);
+          } else if (date) {
+            records.delete(id);
+            filteredOld++;
+            return;
+          } else {
+            unknownDates++;
+          }
+          rec.active = EClassFeatures.isAssessmentActive(
+            EClassFeatures.detailPayload(response) || { aplicacao: raw, avaliacao: {} }
+          );
+        } catch (error) {
+          detailErrors++;
+          if (error?.status === 429) stoppedForRateLimit = true;
+          if (detailErrors <= 4) {
+            log('Detalhes de aplicação indisponíveis (' + assessmentErrorBrief(error) +
+              '). A prova continua visível, mas não foi verificada.', 'warn');
+          }
+        }
       }));
-      status.textContent = 'Verificando criação: ' + Math.min(i + batchSize, candidates.length) +
-        '/' + candidates.length + ' aplicações...';
+      renderExistingAssessmentChoices(records, selectedId);
+      status.textContent = 'Conferindo datas: ' + Math.min(i + batchSize, ids.length) +
+        '/' + ids.length + ' · ' + records.size + ' prova(s) visível(is)...';
     }
 
-    // Fallback histórico: os dados salvos podem ser de uma versão anterior
-    // da extensão. A consulta real, quando disponível, tem precedência.
     const { eciHistory = [] } = await chrome.storage.local.get({ eciHistory: [] });
     for (const run of eciHistory) {
       const rec = EClassFeatures.assessmentRecord(run.assessmentResponse);
       if (rec && !records.has(rec.id) &&
           EClassFeatures.withinDays({ ...rec, date: run.at || rec.date }, days)) {
-        records.set(rec.id, { ...rec, date: run.at || rec.date, historyOnly: true });
+        records.set(rec.id, {
+          ...rec, date: run.at || rec.date, historyOnly: true
+        });
       }
     }
-
-    const list = [...records.values()].sort((a, b) => b.date.localeCompare(a.date));
-    $('existingAssessments').replaceChildren(new Option('Selecione uma prova', ''));
-    for (const rec of list) {
-      const dateValue = new Date(rec.date.replace(' ', 'T'));
-      const humanDate = Number.isNaN(dateValue.getTime()) ? rec.date.slice(0, 10) :
-        dateValue.toLocaleDateString('pt-BR');
-      const label = rec.title + ' · criada em ' + humanDate +
-        (rec.active ? ' · ATIVA (edição bloqueada)' : '') +
-        (rec.historyOnly ? ' · histórico local' : '');
-      const option = new Option(label, rec.id);
-      option.disabled = Boolean(rec.active);
-      $('existingAssessments').add(option);
-      if (rec.id === previousId && !rec.active) option.selected = true;
-    }
-
-    const warnings = [];
-    if (truncated) warnings.push('resultado limitado às primeiras 30 páginas');
-    if (listError) warnings.push('falha parcial/total na consulta de páginas');
-    if (detailErrors) warnings.push(detailErrors + ' detalhe(s) não acessíveis');
-    if (withoutDate) warnings.push(withoutDate + ' aplicação(ões) sem data de criação');
-    status.textContent = list.length + ' prova(s) criada(s) nos últimos ' + days +
-      ' dias · ' + pagesLoaded + ' página(s), ' + totalReturned + ' avaliação(ões) no portal' +
-      (warnings.length ? ' · ' + warnings.join('; ') : '') + '.';
-    log(status.textContent, warnings.length ? 'warn' : 'ok');
+    const visibleCount = renderExistingAssessmentChoices(records, selectedId);
+    const parts = [
+      visibleCount + ' aplicação(ões) listada(s)',
+      pagesLoaded + ' página(s) consultada(s)',
+      evaluationsFound + ' avaliação(ões) no portal'
+    ];
+    if (filteredOld) parts.push(filteredOld + ' fora dos últimos ' + days + ' dias');
+    if (detailErrors) parts.push(detailErrors + ' detalhe(s) não acessível(is), mantidos na lista');
+    if (unknownDates) parts.push(unknownDates + ' sem data de criação');
+    if (noApplicationCount) parts.push(noApplicationCount + ' avaliação(ões) sem aplicação');
+    if (truncated) parts.push('limite de 30 páginas atingido');
+    if (stoppedForRateLimit) parts.push('limite HTTP 429, interrompi a verificação');
+    if (listError) parts.push('ERRO NA LISTAGEM: ' + listError);
+    if (!visibleCount) parts.push(listError ?
+      'confira sessão, entidade, ano e o log' :
+      'amplie o período para 365 dias ou confira a entidade e o ano');
+    status.textContent = parts.join(' · ') + '.';
+    log(status.textContent,
+      listError || detailErrors || stoppedForRateLimit ? 'warn' : 'ok');
   } finally {
     button.disabled = false;
   }
 }
+
 
 function validateEnhancements(c) {
   for (const q of state.parsed) {
