@@ -10,6 +10,8 @@ state.existingLookupSeq = 0;
 state.savedNewClasses = null;
 state.lastExistingMode = false;
 state.currentPortalUserId = null;
+state.existingSubjectPlan = null;
+state.savedNewDestination = null;
 
 function questionImages(q) {
   return state.figureBindings[q.number] || (state.figureBindings[q.number] = {});
@@ -187,11 +189,77 @@ async function portalCurrentUserId() {
   return id;
 }
 
+function renderExistingDestination() {
+  const existing = $('useExistingAssessment').checked;
+  const panel = $('existingSubjectPanel');
+  if (!panel) return;
+  panel.classList.toggle('hidden', !existing);
+  $('subjectSelectLabel').classList.toggle('hidden', existing);
+  for (const id of ['subject', 'term', 'startDate', 'resultDate']) {
+    $(id).disabled = existing;
+  }
+  if (!existing) return;
+  const id = targetAssessmentId();
+  const selected = state.existingTarget?.id === id ? state.existingTarget : null;
+  const list = $('existingSubjectList');
+  list.replaceChildren();
+  state.existingSubjectPlan = null;
+  if (!selected) {
+    $('term').value = '';
+    $('startDate').value = '';
+    $('resultDate').value = '';
+    $('existingSubjectStatus').textContent = 'Selecione a aplicação para carregar disciplinas e cotas.';
+    $('existingCalendarStatus').textContent = 'Bimestre e datas serão carregados automaticamente do portal.';
+    return;
+  }
+  const schedule = selected.calendar;
+  $('startDate').value = schedule.startDate;
+  $('resultDate').value = schedule.resultDate;
+  if (schedule.termId != null && Number.isSafeInteger(schedule.termId)) {
+    const value = String(schedule.termId);
+    if (![...$('term').options].some(o => o.value === value)) {
+      $('term').add(new Option('Bimestre da aplicação (' + value + ')', value));
+    }
+    $('term').value = value;
+  } else {
+    $('term').value = '';
+  }
+  const termLabel = schedule.termName ||
+    $('term').selectedOptions?.[0]?.textContent ||
+    (schedule.termNumber != null ? 'Bimestre nº ' + schedule.termNumber : 'não informado');
+  $('existingCalendarStatus').textContent =
+    'Bimestre: ' + (schedule.termId != null ? termLabel : 'não informado') +
+    ' · Início: ' + (schedule.startDate || 'não informado') +
+    ' · Resultado: ' + (schedule.resultDate || 'não informado') +
+    '. Campos protegidos; o Injector preserva os valores da aplicação.';
+
+  const plan = EClassFeatures.existingSubjectPlan(
+    selected.detail, state.currentPortalUserId, state.parsed);
+  state.existingSubjectPlan = plan;
+  for (const part of plan.assignments || []) {
+    const item = document.createElement('div');
+    const included = plan.entries.filter(q => q.subjectId === part.subjectId);
+    const first = included[0]?.number, last = included[included.length - 1]?.number;
+    const range = included.length ?
+      ' · Q' + first + (last !== first ? '–Q' + last : '') +
+      ' (' + included.length + ' questão(ões))' : '';
+    const quota = part.limit == null ? 'sem limite informado' :
+      part.remaining + '/' + part.limit + ' vaga(s) restantes';
+    item.textContent = part.subjectName + ' (' + part.subjectId + ') · ' + quota + range;
+    list.appendChild(item);
+  }
+  $('existingSubjectStatus').textContent = plan.valid ?
+    'Distribuição automática na ordem do arquivo LaTeX. Confira o conteúdo de cada disciplina antes de enviar.' :
+    'Distribuição indisponível: ' + plan.reason +
+    ' O envio de questões novas fica bloqueado.';
+}
+
 function renderExistingAudience() {
   const existing = $('useExistingAssessment').checked;
   const selected = state.existingTarget;
   const id = targetAssessmentId();
   const isConfirmed = existing && selected?.id === id;
+  renderExistingDestination();
   const classes = isConfirmed ? selected.audience.classes : [];
   const official = new Set(classes.map(x => Number(x.id)));
   const boxes = [...document.querySelectorAll('.classCheck')];
@@ -199,7 +267,8 @@ function renderExistingAudience() {
   // a prova existente não puder ser confirmada. O botão de reenviar
   // continua independente, preservando operações pendentes.
   const canAdd = isConfirmed && !selected.permissions.active &&
-    selected.permissions.canEditQuestions;
+    selected.permissions.canEditQuestions &&
+    (!state.parsed.length || state.existingSubjectPlan?.valid);
   $('inject').disabled = existing && !canAdd;
 
   for (const box of boxes) {
@@ -289,7 +358,8 @@ async function loadExistingAudience() {
     if (current !== state.existingLookupSeq || !$('useExistingAssessment').checked ||
         targetAssessmentId() !== id) return;
     const permissions = EClassFeatures.assessmentPermissions(detail, userId);
-    state.existingTarget = { id, audience, permissions };
+    const calendar = EClassFeatures.assessmentCalendar(detail);
+    state.existingTarget = { id, audience, permissions, calendar, detail };
     renderExistingAudience();
     if (!audience.verified) {
       log('O E-Class não retornou as turmas oficiais da aplicação ' + id + '.', 'warn');
@@ -311,6 +381,9 @@ function toggleModes() {
   const existing = $('useExistingAssessment').checked;
   if (existing && !state.lastExistingMode) {
     state.savedNewClasses = [...document.querySelectorAll('.classCheck:checked')].map(x => Number(x.value));
+    state.savedNewDestination = Object.fromEntries(
+      ['subject', 'term', 'startDate', 'resultDate'].map(id => [id, $(id).value])
+    );
   }
   $('existingArea').classList.toggle('hidden', !existing);
   $('newAssessmentFields').classList.toggle('hidden', existing);
@@ -326,6 +399,11 @@ function toggleModes() {
     state.existingTarget = null;
     const restore = new Set(state.savedNewClasses || []);
     for (const el of document.querySelectorAll('.classCheck')) el.checked = restore.has(Number(el.value));
+    for (const [field, value] of Object.entries(state.savedNewDestination || {})) {
+      if (field === 'term' && ![...$('term').options].some(o => o.value === value)) rebuildSelectors();
+      $(field).value = value;
+    }
+    state.existingSubjectPlan = null;
   }
   state.lastExistingMode = existing;
   renderExistingAudience();
@@ -590,6 +668,9 @@ function enhancementsFormConfig() {
     targetAssessmentId: $('useExistingAssessment').checked ? targetAssessmentId() : '',
     existingAudienceClassIds: $('useExistingAssessment').checked &&
       state.existingTarget?.id === targetAssessmentId() ?
-      [...state.existingTarget.audience.classIds] : []
+      [...state.existingTarget.audience.classIds] : [],
+    questionSubjectIds: $('useExistingAssessment').checked &&
+      state.existingTarget?.id === targetAssessmentId() &&
+      state.existingSubjectPlan?.valid ? { ...state.existingSubjectPlan.mapping } : {}
   };
 }
