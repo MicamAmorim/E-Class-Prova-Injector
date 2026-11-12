@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "E-Class Prova Injector",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Importa provas LaTeX com figuras, permite público individual e atualização assistida de avaliações no E-Class Prova.",
   "permissions": [
     "storage",
