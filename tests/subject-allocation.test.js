@@ -315,3 +315,15 @@ test('REGRESSÃO: modo de prova nova não consulta cotas nem altera público-alv
   assert.match(core, /const selectedClasses = \$\('useExistingAssessment'\)\?\.checked &&/);
   assert.match(core, /document\.querySelectorAll\('\.classCheck:checked'\)/);
 });
+
+
+test('ordem da avaliação prevalece sobre ordem arbitrária das atribuições de coautoria', () => {
+  const d = fixture();
+  d.aplicacao.coautores.reverse(); // backend pode retornar Investigação antes
+  const plan = F.existingSubjectPlan(d, 123, questions(20));
+  assert.equal(plan.valid, true);
+  assert.equal(plan.entries[0].subjectId, 140);
+  assert.equal(plan.entries[14].subjectId, 140);
+  assert.equal(plan.entries[15].subjectId, 390);
+  assert.equal(plan.entries[19].subjectId, 390);
+});
