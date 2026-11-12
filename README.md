@@ -1,4 +1,4 @@
-# E-Class Prova Injector — Edge v0.2.4
+# E-Class Prova Injector — Edge v0.2.5
 
 Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questões objetivas e gabarito, converte as fórmulas LaTeX usando o mesmo endpoint observado no E-Class e cria as questões / avaliação pelas APIs usadas pelo próprio portal.
 
@@ -195,3 +195,20 @@ O arquivo gerado segue o schema existente `eclass-omr-exam/1` (`*.eclass-omr.jso
 O campo **Título do gabarito** permite personalizar o nome. Com o campo vazio, usa o título da avaliação existente selecionada, o título informado no formulário ou o nome do arquivo LaTeX. A exportação usa ID externo determinístico por prova/ano/entidade para facilitar reimportações sem gerar duplicações acidentais. A exportação não envia dados ao portal, embora o arquivo JSON baixado possa conter nomes dos alunos; mantenha-o protegido.
 
 **Atenção à recuperação de operações:** se o E-Class retornar HTTP 500 ao tentar atualizar uma prova existente, as questões que já foram criadas poderão continuar no banco mesmo sem associação à avaliação. Não repita **Criar no E-Class** nem desinstale a extensão: o estado pendente fica em `chrome.storage.local`. Antes de clicar em **Reenviar só a prova**, confira se as questões já foram associadas à avaliação; o contrato do PUT continua não confirmado. O botão do Corretor funciona independentemente dessa pendência.
+
+### 8. Turmas oficiais e permissões de provas existentes (v0.2.5)
+
+**Problema observado no envio real:** 20 questões foram criadas, mas a tentativa de `PUT /api/v1/aplicacao-avaliacao/{uuid}` retornou HTTP 500. O HAR fornecido mostra que a aplicação consultada já possui **duas turmas em `publico_alvo`**, com propriedades específicas por turma e `is_owner: false`. Isso não prova que a restrição de turmas causou o erro; também não foi confirmada a estrutura aceita pelo servidor no PUT.
+
+**Ao escolher uma prova existente:**
+
+1. O Injector consulta `GET /api/v1/aplicacao-avaliacao/{uuid}` e extrai as turmas de `publico_alvo`, apresentando seus nomes, IDs e totais de destinatários quando informados.
+2. A seção **Destino → Turmas** passa a exibir somente as turmas oficiais associadas, com os checkboxes **bloqueados**. Quando uma turma não consta das opções carregadas na conta, ela continua visível na lista oficial.
+3. A seleção manual feita para uma prova **nova** é preservada e restaurada ao sair do modo de atualização.
+4. O código de mesclagem de questões preserva o objeto completo `aplicacao.publico_alvo` sem substituí-lo; nenhum checkbox do formulário altera o público da prova existente.
+5. Antes de criar qualquer questão nova para uma aplicação existente, o Injector verifica atividade/tentativas, presença de `publico_alvo` e sinais de autorização da sessão. Se `is_owner` for `false` (ou desconhecido) e **não houver permissão explícita de editar questões**, bloqueia a ação **antes de criar questões**.
+6. Se o servidor expuser futuramente uma permissão **positiva e explícita** para editar público-alvo, ela poderá ser detectada. Porém, a alteração de turmas continua **desabilitada mesmo nessa situação**, até capturarmos e validarmos o contrato oficial de escrita e as regras de coordenação. A propriedade `is_owner: true` **sozinha não autoriza alterar turmas**.
+
+**Segurança da pendência anterior:** a atualização do código não descarta o estado salvo em `chrome.storage.local`, nem recria as 20 questões. Não desinstale a extensão; recarregue-a na mesma pasta. Não use **Criar no E-Class** novamente e não pressione **Reenviar só a prova** até verificar se a atualização já foi aplicada e obter confirmação da rota de edição. A conta pode estar como coautora sem ser proprietária; `is_owner: false` não comprova, isoladamente, ausência de toda e qualquer permissão de coautoria.
+
+**Limitação:** a inferência de autorização de edição de questões é conservadora e baseada apenas nas informações atualmente observadas. Provas de terceiros podem exigir fluxo de autorização diferente, mesmo para coautores. A operação PUT permanece experimental: isso não substitui um HAR capturado ao editar com sucesso uma prova existente no portal oficial.
