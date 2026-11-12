@@ -182,6 +182,12 @@ function renderExistingAudience() {
   const classes = isConfirmed ? selected.audience.classes : [];
   const official = new Set(classes.map(x => Number(x.id)));
   const boxes = [...document.querySelectorAll('.classCheck')];
+  // Jamais iniciar uma criação de questões quando a autorização para editar
+  // a prova existente não puder ser confirmada. O botão de reenviar
+  // continua independente, preservando operações pendentes.
+  const canAdd = isConfirmed && !selected.permissions.active &&
+    (selected.permissions.canEditQuestions || selected.permissions.isOwner);
+  $('inject').disabled = existing && !canAdd;
 
   for (const box of boxes) {
     if (existing) {
@@ -223,6 +229,9 @@ function renderExistingAudience() {
     text + ' ' + owner + ' ' +
     (perm.active ? 'Aplicação ativa/encerrada ou com tentativas.' :
       'O HAR não comprova permissão para editar turmas; a seleção permanece bloqueada.') +
+    ((!perm.canEditQuestions && !perm.isOwner) ?
+      ' Adição de novas questões bloqueada: permissão não confirmada.' :
+      ' A adição de questões continua experimental; nenhum destinatário será alterado.') +
     (selected.audience.hasIndividuals ? ' Público-alvo também inclui destinatários individuais.' : '');
 }
 
