@@ -12,7 +12,7 @@
       <h1>E-Class Prova Injector</h1>
       <p>LaTeX → questões → prova no E-Class</p>
     </div>
-    <span id="version">v0.1.1</span>
+    <span id="version">v0.2.0</span>
   </header>
 
   <main>
@@ -28,7 +28,23 @@
     </section>
 
     <section class="card">
-      <h2>1. Arquivo LaTeX</h2>
+      <h2>1. Arquivo da prova</h2>
+      <label class="toggle"><input id="useExistingAssessment" type="checkbox"> Adicionar questões a uma prova já criada (sem criar nova avaliação)</label>
+      <div id="existingArea" class="hidden subpanel">
+        <div class="row wrap">
+          <label>Período de busca (últimos dias)
+            <input id="assessmentDays" type="number" min="1" max="365" value="15">
+          </label>
+          <button id="loadAssessments" class="secondary">Listar provas</button>
+        </div>
+        <label>Provas encontradas
+          <select id="existingAssessments"><option value="">Selecione uma prova</option></select>
+        </label>
+        <label>UUID/ID da prova (também pode ser informado manualmente)
+          <input id="existingAssessmentId" placeholder="UUID da avaliação existente">
+        </label>
+        <p id="assessmentListStatus" class="hint">Últimos 15 dias por padrão. A atualização será bloqueada se o portal não fornecer detalhes completos da prova.</p>
+      </div>
       <label class="filebox">
         <span>Selecionar arquivo .tex</span>
         <input id="texFile" type="file" accept=".tex,text/x-tex,text/plain">
@@ -37,7 +53,7 @@
         <label>Seção da prova
           <input id="sectionName" value="MATEMÁTICA">
         </label>
-        <label>Título no E-Class
+        <label id="newAssessmentFields">Título no E-Class
           <input id="title" value="TESTE INJECTOR - APAGAR">
         </label>
       </div>
@@ -69,6 +85,19 @@
       </div>
       <label class="block">Turmas</label>
       <div id="classes" class="checks"></div>
+      <label class="toggle"><input id="specificStudents" type="checkbox"> Enviar somente para alunos específicos das turmas selecionadas</label>
+      <div id="studentsArea" class="hidden subpanel">
+        <p id="studentRosterStatus" class="hint"></p>
+        <div id="studentRoster" class="checks"></div>
+        <label>IDs dos alunos (se não vierem na consulta das turmas)
+          <textarea id="studentIds" rows="3" placeholder="turma_id;aluno_id (um por linha)&#10;Com uma única turma selecionada, basta o ID do aluno"></textarea>
+        </label>
+        <details>
+          <summary>Modelo de público individual validado (obrigatório para envio real)</summary>
+          <p class="hint">Por segurança, a extensão não presumirá a estrutura de destinatários individuais: se o portal ignorar um campo desconhecido, a prova poderia atingir toda a turma. Forneça um objeto JSON compatível com o público individual de uma turma, obtido de uma aplicação oficial. Variáveis aceitas: {{turma_id}}, {{entidade_id}}, {{alunos_ids}}, {{alunos_objetos}}.</p>
+          <textarea id="studentAudienceTemplate" rows="5" spellcheck="false" placeholder='Exemplo ilustrativo, NÃO validado: {"turma_id":"{{turma_id}}","entidade_id":"{{entidade_id}}","alunos":"{{alunos_objetos}}"}'></textarea>
+        </details>
+      </div>
     </section>
 
     <details class="card">
@@ -126,8 +155,10 @@
   </main>
 
   <script src="parser.js"></script>
+  <script src="features.js"></script>
   <script src="panel-core.js"></script>
   <script src="panel-parse.js"></script>
+  <script src="panel-enhancements.js"></script>
   <script src="panel-run.js"></script>
   <script src="panel-init.js"></script>
 </body>
