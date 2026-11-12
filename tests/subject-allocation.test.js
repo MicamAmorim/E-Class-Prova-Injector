@@ -207,38 +207,21 @@ test('GUI de prova existente apresenta distribuição por disciplina e trava bim
     enhancementsCode.indexOf('function renderExistingDestination()'),
     enhancementsCode.indexOf('function renderExistingAudience()')
   );
-  const render = new Function('state','
-    state,id=>elements[id],d,F,()=>elements.existingAssessmentId.value,
-    class{constructor(text,value){this.textContent=text;this.value=value}}
-  );
-  render();
-  assert.equal(elements.subject.disabled,true);
-  assert.equal(elements.term.disabled,true);
-  assert.equal(elements.startDate.disabled,true);
-  assert.equal(elements.resultDate.disabled,true);
-  assert.equal(elements.startDate.value,'2026-11-20');
-  assert.equal(elements.resultDate.value,'2026-11-25');
-  assert.equal(elements.term.value,'18315');
-  assert.equal(elements.existingSubjectList.children.length,2);
-  assert.match(elements.existingSubjectList.children[0].textContent,/Q1–Q15/);
-  assert.match(elements.existingSubjectList.children[1].textContent,/Q16–Q20/);
-  assert.deepEqual(state.existingSubjectPlan.mapping,plan.mapping);
-});
-,'document','EClassFeatures','targetAssessmentId','Option',
+  const render = new Function('state','$','document','EClassFeatures','targetAssessmentId','Option',
     onlyDestination + '\nreturn renderExistingDestination;')(
-    state,id=>elements[id],d,F,()=>elements.existingAssessmentId.value,
-    class{constructor(text,value){this.textContent=text;this.value=value}}
+    state, id => elements[id], d, F, () => elements.existingAssessmentId.value,
+    class { constructor(text, value) { this.textContent = text; this.value = value; } }
   );
   render();
-  assert.equal(elements.subject.disabled,true);
-  assert.equal(elements.term.disabled,true);
-  assert.equal(elements.startDate.disabled,true);
-  assert.equal(elements.resultDate.disabled,true);
-  assert.equal(elements.startDate.value,'2026-11-20');
-  assert.equal(elements.resultDate.value,'2026-11-25');
-  assert.equal(elements.term.value,'18315');
-  assert.equal(elements.existingSubjectList.children.length,2);
-  assert.match(elements.existingSubjectList.children[0].textContent,/Q1–Q15/);
-  assert.match(elements.existingSubjectList.children[1].textContent,/Q16–Q20/);
-  assert.deepEqual(state.existingSubjectPlan.mapping,plan.mapping);
+  assert.equal(elements.subject.disabled, true);
+  assert.equal(elements.term.disabled, true);
+  assert.equal(elements.startDate.disabled, true);
+  assert.equal(elements.resultDate.disabled, true);
+  assert.equal(elements.startDate.value, '2026-11-20');
+  assert.equal(elements.resultDate.value, '2026-11-25');
+  assert.equal(elements.term.value, '18315');
+  assert.equal(elements.existingSubjectList.children.length, 2);
+  assert.match(elements.existingSubjectList.children[0].textContent, /Q1–Q15/);
+  assert.match(elements.existingSubjectList.children[1].textContent, /Q16–Q20/);
+  assert.deepEqual(state.existingSubjectPlan.mapping, plan.mapping);
 });
