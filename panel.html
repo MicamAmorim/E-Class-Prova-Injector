@@ -85,7 +85,7 @@
         <button id="loadPortalData" class="secondary">Carregar do portal</button>
       </div>
       <div class="grid2">
-        <label>Disciplina
+        <label id="subjectSelectLabel">Disciplina
           <select id="subject"></select>
         </label>
         <label>Bimestre
@@ -97,6 +97,12 @@
         <label>Data de resultado
           <input id="resultDate" type="date">
         </label>
+      </div>
+      <div id="existingSubjectPanel" class="subpanel hidden">
+        <strong>Distribuição automática por disciplina da prova existente</strong>
+        <div id="existingSubjectList" class="checks" aria-live="polite"></div>
+        <p id="existingSubjectStatus" class="hint">As cotas de coautoria serão carregadas da aplicação e atribuídas às questões na ordem do LaTeX.</p>
+        <p id="existingCalendarStatus" class="hint">Bimestre e datas: aguardando seleção da aplicação.</p>
       </div>
       <label class="block">Turmas</label>
       <p id="classesLockStatus" class="hint">Para uma prova já criada, as turmas serão consultadas no E-Class. A seleção abaixo é apenas informativa.</p>
