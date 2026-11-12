@@ -3,6 +3,7 @@
 const API = {
   question: 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/questao',
   assessment: 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/aplicacao-avaliacao',
+  currentUser: 'https://api-usuario.educacaoadventista.org.br/api/v1/dados-usuario',
   // Capturado no HAR do portal (GET): a lista é /avaliacao, não /aplicacao-avaliacao.
   assessmentList: (config, page = 1, pageSize = 25) => {
     const entity = { id: config.entityId, nome: config.entityName, tipo: config.entityType, externo: false };
