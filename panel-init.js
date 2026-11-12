@@ -15,7 +15,11 @@ async function persistConfig() {
 }
 
 function bind() {
-  $('texFile').addEventListener('change', async e => { await fileChanged(e.target.files?.[0]); });
+  $('texFile').addEventListener('change', e => safe(async () => {
+    clearFolderSelection();
+    await fileChanged(e.target.files?.[0]);
+    if (state.latex) await analyzeLatex();
+  }));
   $('analyze').addEventListener('click', () => safe(analyzeLatex));
   $('simulate').addEventListener('click', () => safe(simulate));
   $('inject').addEventListener('click', () => safe(inject));
@@ -27,6 +31,7 @@ function bind() {
     state.latex = ''; state.fileName = null; state.parsed = []; state.figureBindings = {}; state.macroMap = new Map(); $('texFile').value = ''; $('preview').innerHTML = 'Analise um arquivo .tex para visualizar as questões.'; $('preview').className = 'preview empty'; $('analysisSummary').textContent = 'Nenhum arquivo analisado.'; $('questionCount').textContent = '0 questões';
   });
   enhancementsBind();
+  bindFolderImport();
   $('copyLog').addEventListener('click', async () => { await navigator.clipboard.writeText($('log').textContent); log('Log copiado.', 'ok'); });
   document.querySelectorAll('.advanced input, #sectionName').forEach(el => el.addEventListener('change', persistConfig));
 }
