@@ -84,3 +84,64 @@ test('arquivos JavaScript da extensão têm sintaxe válida e painel referencia 
   assert.ok(scripts.indexOf('features.js') < scripts.indexOf('panel-enhancements.js'));
   assert.ok(scripts.indexOf('panel-enhancements.js') < scripts.indexOf('panel-run.js'));
 });
+
+test('HAR E-Class: listagem real é paginada e uma avaliação pode conter aplicações', () => {
+  const response = {
+    ret: 1,
+    data: {
+      current_page: 1, last_page: 3, per_page: 25, total: 61,
+      data: [
+        {
+          uuid: 'avaliacao-1', titulo: 'Prova de exemplo',
+          aplicacoes_min_data_inicio: '2026-12-04 00:00:00',
+          aplicacoes: [
+            { uuid: 'aplicacao-1', status: 0, data_inicio: '2026-12-04T03:00:00Z' },
+            { uuid: 'aplicacao-2', status: 0, data_inicio: '2026-12-05T03:00:00Z' }
+          ]
+        }
+      ]
+    }
+  };
+  const page = F.assessmentListPage(response);
+  assert.equal(page.lastPage, 3);
+  assert.equal(page.total, 61);
+  const items = F.applicationCandidates(page.rows);
+  assert.deepEqual(items.map(x => x.id), ['aplicacao-1', 'aplicacao-2']);
+  assert.equal(items[0].evaluationId, 'avaliacao-1');
+  assert.equal(items[0].title, 'Prova de exemplo');
+});
+
+test('HAR E-Class: data de início futura não substitui a criação da aplicação', () => {
+  const detail = {
+    ret: 1,
+    data: {
+      uuid: 'aplicacao-1',
+      created_at: '2026-11-09T16:00:00.000000Z',
+      data_inicio: '2026-12-04T03:00:00.000000Z',
+      status: 0, tentativa_count: 0, encerrada: 0,
+      publico_alvo: [],
+      avaliacao: { uuid: 'avaliacao-1', titulo: 'Prova de exemplo', questoes: [] }
+    }
+  };
+  const normalized = F.detailPayload(detail);
+  assert.equal(normalized.aplicacao.uuid, 'aplicacao-1');
+  assert.equal(normalized.avaliacao.uuid, 'avaliacao-1');
+  assert.deepEqual(normalized.questoes, []);
+  assert.equal(F.isAssessmentActive(normalized), false);
+  assert.equal(F.withinDays({ date: normalized.aplicacao.created_at }, 15,
+    new Date('2026-11-12T19:00:00Z')), true);
+  assert.equal(F.withinDays({ date: normalized.aplicacao.data_inicio }, 15,
+    new Date('2026-11-12T19:00:00Z')), false);
+});
+
+test('HAR E-Class: uma aplicação já respondida ou encerrada não pode ser alterada', () => {
+  const detail = {
+    aplicacao: { uuid: 'a', status: 0, tentativa_count: 1, encerrada: 0 },
+    avaliacao: { uuid: 'b' }, questoes: [{ uuid: 'q' }]
+  };
+  assert.equal(F.isAssessmentActive(detail), true);
+  assert.throws(() => F.mergeAssessment(detail, [{ uuid: 'new' }], n => Array(n).fill(100 / n)), /ativa/);
+  assert.equal(F.isAssessmentActive({
+    ...detail, aplicacao: { status: 0, encerrada: 1, tentativa_count: 0 }
+  }), true);
+});
