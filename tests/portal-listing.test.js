@@ -133,7 +133,7 @@ test('listagem permanece visível quando todos os detalhes falham e a sessão n�
     'portalHeaders', 'apiFetch', 'API', 'chrome', 'log', 'Option',
     panelEnhancements + '\nreturn {loadExistingAssessments};'
   )(
-    F, { figureBindings: {} }, id => ui[id], () => null, async () => false,
+    F, { figureBindings: {}, remote: {} }, id => ui[id], () => null, async () => false,
     () => ({ publisher: 1, entityId: 89, entityName: 'Escola fictícia', entityType: 1, academicYear: 2026 }),
     (contentType, requireToken) => {
       assert.equal(requireToken, false, 'consultas GET devem aceitar ausência de Bearer');
@@ -172,7 +172,7 @@ test('falha da rota principal exibe HTTP em vez de esconder o erro atrás de lis
   };
   const api = vm.runInNewContext(core + '\nAPI', { URLSearchParams });
   const deps = {
-    EClassFeatures: F, state: { figureBindings: {} }, $: id => ui[id],
+    EClassFeatures: F, state: { figureBindings: {}, remote: {} }, $: id => ui[id],
     tokenForRequest: () => 'dummy', detectSession: async () => true,
     formConfig: () => ({ publisher: 1, entityId: 89, entityName: 'Escola fictícia', entityType: 1, academicYear: 2026 }),
     portalHeaders: () => ({}),
