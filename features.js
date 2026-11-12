@@ -120,6 +120,72 @@
     return null;
   }
 
+  // Os destinatários pertencem à APLICAÇÃO já criada, não à seleção
+  // local de turmas do professor. O HAR comprova publico_alvo com turma_id
+  // e metadados para cada turma; preserve os objetos completos sem reescrever.
+  function assessmentAudience(detail) {
+    const app = detail?.aplicacao || detail;
+    if (!app || !Array.isArray(app.publico_alvo)) {
+      return { verified: false, classes: [], classIds: [], entries: [], hasIndividuals: false };
+    }
+    const classes = [];
+    const seen = new Set();
+    let hasIndividuals = false;
+    for (const entry of app.publico_alvo) {
+      if (!entry || typeof entry !== 'object') continue;
+      const id = Number(entry.turma_id ?? entry.turma?.id);
+      if (entry.user_id != null || entry.aluno_id != null) hasIndividuals = true;
+      if (!Number.isSafeInteger(id) || id <= 0 || seen.has(id)) continue;
+      seen.add(id);
+      classes.push({
+        id,
+        name: String(entry.turma?.descricao || entry.turma?.cod_turma || id),
+        count: Number.isFinite(Number(entry.total_publico_alvo)) ?
+          Number(entry.total_publico_alvo) : null
+      });
+    }
+    return {
+      verified: true,
+      classes,
+      classIds: classes.map(item => item.id),
+      entries: app.publico_alvo,
+      hasIndividuals
+    };
+  }
+
+  function assessmentPermissions(detail) {
+    const app = detail?.aplicacao || detail || {};
+    const exam = detail?.avaliacao || app.avaliacao || {};
+    const active = isAssessmentActive(detail?.aplicacao ? detail : {
+      aplicacao: app, avaliacao: exam
+    });
+    // Em particular, is_owner não indica por si só permissão sobre o
+    // publico_alvo. Sinais ausentes são desconhecidos, nunca "autorizado".
+    const explicitAudience = app.can_edit_publico_alvo === true ||
+      app.pode_editar_publico_alvo === true ||
+      app.permissions?.can_edit_publico_alvo === true;
+    const explicitQuestions = app.can_edit_questoes === true ||
+      app.pode_editar_questoes === true ||
+      app.permissions?.can_edit_questoes === true;
+    return {
+      active,
+      isOwner: app.is_owner === true,
+      isOwnerKnown: typeof app.is_owner === 'boolean',
+      canChangeClasses: !active && explicitAudience,
+      canEditQuestions: !active && explicitQuestions,
+      audiencePermissionVerified: explicitAudience,
+      questionPermissionVerified: explicitQuestions
+    };
+  }
+
+  function assertUnchangedAudience(before, after) {
+    const original = before?.aplicacao?.publico_alvo;
+    const updated = after?.aplicacao?.publico_alvo;
+    if (!Array.isArray(original) || JSON.stringify(original) !== JSON.stringify(updated)) {
+      throw new Error('A atualização tentou alterar o público-alvo da aplicação; operação bloqueada.');
+    }
+  }
+
   function isAssessmentActive(detail) {
     const app = detail.aplicacao || {};
     const exam = detail.avaliacao || {};
@@ -153,6 +219,7 @@
     const weights = weightFn(combined.length);
     const result = JSON.parse(JSON.stringify(detail));
     result.questoes = combined.map((q, i) => ({ ...q, peso: weights[i] }));
+    if (detail.aplicacao?.publico_alvo != null) assertUnchangedAudience(detail, result);
     return result;
   }
 
@@ -210,6 +277,7 @@
     figureTags, replaceFigureTags, extractRows, assessmentRecord,
     withinDays, detailPayload, isAssessmentActive, mergeAssessment,
     studentsFromClasses, makeIndividualAudience, questionId,
-    assessmentListPage, applicationCandidates
+    assessmentListPage, applicationCandidates,
+    assessmentAudience, assessmentPermissions, assertUnchangedAudience
   };
 });
