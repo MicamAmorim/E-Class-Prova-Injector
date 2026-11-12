@@ -1,4 +1,4 @@
-# E-Class Prova Injector — Edge v0.2.3
+# E-Class Prova Injector — Edge v0.2.4
 
 Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questões objetivas e gabarito, converte as fórmulas LaTeX usando o mesmo endpoint observado no E-Class e cria as questões / avaliação pelas APIs usadas pelo próprio portal.
 
@@ -185,3 +185,13 @@ Correção para listagem vazia mesmo com a versão 0.2.2 instalada. A versão an
 A consulta de leitura não exige localmente um token Bearer, pois ele pode não estar disponível para a extensão. O servidor do E-Class continua responsável por autorizar o GET. **Toda escrita permanece com token e confirmação.** Falhas na listagem são mostradas na própria interface com código HTTP e sugestão de verificar sessão, entidade e ano. Falhas 401/403/429 nas consultas de detalhes interrompem novas solicitações após o lote em andamento, sem apagar provas já listadas.
 
 Validação: testes simulados cobrem paginação, filtros, perda de acesso aos detalhes, ausência de token em consultas de leitura e preservação da proteção das requisições de escrita. A integração real com o portal deve ser confirmada no Edge do usuário. **A operação PUT de atualização de uma prova ainda não foi verificada pelo HAR.**
+
+### 7. Retorno da exportação ao Corretor de Gabaritos (v0.2.4)
+
+A exportação já existia na branch `word`, mas não tinha sido incluída na branch das melhorias de imagens/listagem. O botão **Exportar para Corretor** voltou para uma seção separada do envio ao E-Class. Ele usa as questões LaTeX **já analisadas**, não recria questões nem altera avaliações.
+
+O arquivo gerado segue o schema existente `eclass-omr-exam/1` (`*.eclass-omr.json`), com os campos originais `schema`, `version`, `source`, `exportedAt`, `externalId`, `exam.title`, `exam.subject`, `exam.mode`, `exam.questions`, `exam.omr` e `exam.classes`. O gabarito é A-E das objetivas, mantendo seus números originais. Se a lista de alunos das turmas estiver disponível, inclui os nomes/IDs no pacote; se não estiver, permite exportação geral. Se houver seleção de alunos específicos, não exporta estudantes não selecionados. Gabarito ausente, questões repetidas e alternativas incompatíveis são bloqueados.
+
+O campo **Título do gabarito** permite personalizar o nome. Com o campo vazio, usa o título da avaliação existente selecionada, o título informado no formulário ou o nome do arquivo LaTeX. A exportação usa ID externo determinístico por prova/ano/entidade para facilitar reimportações sem gerar duplicações acidentais. A exportação não envia dados ao portal, embora o arquivo JSON baixado possa conter nomes dos alunos; mantenha-o protegido.
+
+**Atenção à recuperação de operações:** se o E-Class retornar HTTP 500 ao tentar atualizar uma prova existente, as questões que já foram criadas poderão continuar no banco mesmo sem associação à avaliação. Não repita **Criar no E-Class** nem desinstale a extensão: o estado pendente fica em `chrome.storage.local`. Antes de clicar em **Reenviar só a prova**, confira se as questões já foram associadas à avaliação; o contrato do PUT continua não confirmado. O botão do Corretor funciona independentemente dessa pendência.
