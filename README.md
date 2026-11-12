@@ -115,7 +115,7 @@ No campo de modelo, informe um **objeto JSON correspondente a uma entrada indivi
 
 ### 3. Inserir questões em provas existentes
 
-Em **1. Arquivo da prova**, marque **Adicionar questões a uma prova já criada**. Escolha o intervalo retroativo (15 dias por padrão) e clique **Listar provas**. A extensão tenta consultar `GET /api/v1/aplicacao-avaliacao` e também consulta o histórico local. Se não houver listagem compatível, o UUID pode ser informado diretamente.
+Em **1. Arquivo da prova**, marque **Adicionar questões a uma prova já criada**. Escolha o intervalo retroativo (15 dias por padrão) e clique **Listar provas**. A extensão consulta a rota **confirmada no HAR** `GET /api/v1/avaliacao` com parâmetros de ano, entidade, editora, ordenação e paginação. A listagem pode conter várias aplicações para a mesma avaliação; cada opção usa o UUID da aplicação. Como a listagem não informa a data de criação, a extensão consulta os detalhes de cada aplicação em `GET /api/v1/aplicacao-avaliacao/{uuid}` e aplica o intervalo (15 dias por padrão) ao campo `created_at`. O histórico local continua como alternativa.
 
 - A extensão exige que `GET /api/v1/aplicacao-avaliacao/{uuid}` retorne o objeto completo com `aplicacao`, `avaliacao` e `questoes`. Caso contrário, bloqueia a atualização.
 - Bloqueia provas ativas ou quando encontra respostas existentes.
@@ -123,7 +123,7 @@ Em **1. Arquivo da prova**, marque **Adicionar questões a uma prova já criada*
 - Confere o retorno via GET e exige encontrar todos os IDs novos antes de sinalizar sucesso.
 - Se a operação falhar, salva os IDs de questões e o estado pendente localmente. **Reenviar só a prova** reutiliza os IDs, evitando recriá-las. O reenvio exige o mesmo contexto de entidade, perfil e ano.
 
-**Compatibilidade a validar:** os métodos de leitura/listagem e atualização por UUID são uma integração conservadora baseada na rota de criação conhecida, **mas as rotas de GET/PUT e os formatos de resposta não foram confirmados com uma sessão autenticada do portal**. Verifique primeiramente com uma prova de teste **não publicada e sem respostas**. O portal poderá exigir rota ou payload diferentes; não há fallback que sobrescreva a prova sem dados completos.
+**Compatibilidade a validar:** as rotas de listagem `GET /api/v1/avaliacao` e de detalhes `GET /api/v1/aplicacao-avaliacao/{uuid}` **foram observadas no HAR, com respostas HTTP 200**, e o formato de suas respostas foi adaptado. **A rota e o formato de atualização `PUT` ainda não foram confirmados em uma sessão autenticada do portal**. Verifique primeiramente com uma prova de teste **não publicada e sem respostas**. O portal poderá exigir rota ou payload diferentes; não há fallback que sobrescreva a prova sem dados completos.
 
 ### Testes e regressões
 
