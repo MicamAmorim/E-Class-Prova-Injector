@@ -102,7 +102,7 @@ async function restorePendingAssessment() {
   $('retryAssessment').disabled = false;
   $('clearPending').disabled = false;
   const when = eciPendingAssessment.savedAt ? new Date(eciPendingAssessment.savedAt).toLocaleString() : 'data desconhecida';
-  log(`Pendência restaurada: ${state.createdQuestions.length} questão(ões) já criadas; prova ainda não criada. Salva em ${when}.`, 'warn');
+  log(`Pendência restaurada: ${state.createdQuestions.length} questão(ões) criadas; ${state.pendingOperation.type === 'update' ? 'atualização de prova existente' : 'criação de prova'} ainda pendente. Salva em ${when}.`, 'warn');
   return true;
 }
 
