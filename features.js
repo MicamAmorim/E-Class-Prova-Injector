@@ -157,6 +157,6 @@
   return {
     figureTags, replaceFigureTags, extractRows, assessmentRecord,
     withinDays, detailPayload, isAssessmentActive, mergeAssessment,
-    studentsFromClasses, makeIndividualAudience
+    studentsFromClasses, makeIndividualAudience, questionId
   };
 });
