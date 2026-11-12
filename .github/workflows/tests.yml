@@ -16,5 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validar sintaxe dos arquivos JavaScript
+        run: |
+          for file in ./*.js; do node --check "$file"; done
       - name: Testes (Node nativo)
         run: node --test tests/*.test.js
