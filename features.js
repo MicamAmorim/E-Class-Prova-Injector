@@ -49,7 +49,7 @@
     if (!id) return null;
     const date = app.created_at || exam.created_at || item.created_at ||
       app.data_criacao || exam.data_criacao || item.data_criacao ||
-      app.data_inicio || item.data_inicio || '';
+      app.createdAt || exam.createdAt || item.createdAt || '';
     const title = exam.titulo || item.titulo || item.title || 'Prova ' + id;
     return { id: String(id), title: String(title), date: String(date), raw: item };
   }
