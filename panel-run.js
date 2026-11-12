@@ -165,6 +165,33 @@ function assertExistingQuestionAccess(detail, options = {}) {
       throw new Error('A atribuição de coautoria permite ' + allowance +
         ' questão(ões) restante(s) nesta avaliação; tentativa de inserir ' + count + '.');
     }
+    if (!options.recovery && Array.isArray(options.subjectDistribution)) {
+      const assignments = new Map(rights.coauthor.assignments
+        .filter(x => Number.isSafeInteger(Number(x.subjectId)))
+        .map(x => [Number(x.subjectId), x]));
+      const counts = new Map();
+      for (const entry of options.subjectDistribution) {
+        const id = Number(entry.subjectId);
+        if (!assignments.has(id)) {
+          throw new Error('A disciplina ' + id + ' não consta na coautoria.');
+        }
+        counts.set(id, (counts.get(id) || 0) + 1);
+      }
+      for (const [id, n] of counts) {
+        const allowance = rights.coauthor.assignments
+          .filter(x => Number(x.subjectId) === id);
+        if (allowance.every(x => x.limit != null)) {
+          const max = allowance.reduce((sum, x) => sum + Number(x.limit), 0);
+          const used = detail.questoes.filter(q =>
+            Number(q?.criado_por) === Number(state.currentPortalUserId) &&
+            Number(q?.padrao_disciplina_id) === id).length;
+          if (n + used > max) {
+            throw new Error('Cota excedida na disciplina ' + id + ': ' +
+              n + ' nova(s) + ' + used + ' vinculada(s) para ' + max + ' vagas.');
+          }
+        }
+      }
+    }
     if (!options.recovery && count > 0 && options.subjectId != null) {
       const forSubject = rights.coauthor.assignments.filter(x =>
         x.subjectId == null || Number(x.subjectId) === Number(options.subjectId));
@@ -267,9 +294,17 @@ async function inject() {
     const detail = await fetchExistingAssessment(uuid);
     await portalCurrentUserId().catch(error =>
       log('Não foi possível confirmar identidade da conta: ' + assessmentErrorBrief(error), 'warn'));
+    const plan = EClassFeatures.existingSubjectPlan(detail, state.currentPortalUserId, state.parsed);
+    if (!plan.valid) {
+      throw new Error('Distribuição por disciplina inválida: ' + plan.reason);
+    }
+    if (JSON.stringify(plan.mapping) !== JSON.stringify(c.questionSubjectIds)) {
+      throw new Error('As cotas ou disciplinas da prova mudaram desde a análise. ' +
+        'Selecione a prova novamente antes de enviar; nenhuma questão foi criada.');
+    }
     const check = assertExistingQuestionAccess(detail, {
       questionCount: state.parsed.length,
-      subjectId: c.subjectId
+      subjectDistribution: plan.entries
     }); // antes de criar a primeira questão
     log('Público-alvo conferido: ' + check.audience.classIds.length +
       ' turma(s) existentes; a atualização não modificará seus destinatários.', 'ok');
