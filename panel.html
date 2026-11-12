@@ -44,6 +44,11 @@
           <input id="existingAssessmentId" placeholder="UUID da aplicação (não da avaliação)">
         </label>
         <p id="assessmentListStatus" class="hint">A lista será preenchida mesmo se a consulta de detalhes falhar; nesse caso, a data de criação ficará como não verificada. É possível ampliar o período até 365 dias. Provas ativas ou com respostas não podem ser alteradas.</p>
+        <div id="existingAudiencePanel" class="subpanel">
+          <strong>Turmas já vinculadas à prova</strong>
+          <div id="existingAudienceList" class="checks" aria-live="polite"></div>
+          <p id="existingAudienceStatus" class="hint">Escolha uma prova para carregar as turmas registradas no E-Class. Até confirmar as permissões, a seleção local ficará bloqueada.</p>
+        </div>
       </div>
       <label class="filebox">
         <span>Selecionar pasta da prova (.tex + imagens) — recomendado</span>
@@ -94,6 +99,7 @@
         </label>
       </div>
       <label class="block">Turmas</label>
+      <p id="classesLockStatus" class="hint">Para uma prova já criada, as turmas serão consultadas no E-Class. A seleção abaixo é apenas informativa.</p>
       <div id="classes" class="checks"></div>
       <label class="toggle"><input id="specificStudents" type="checkbox"> Enviar somente para alunos específicos das turmas selecionadas</label>
       <div id="studentsArea" class="hidden subpanel">
