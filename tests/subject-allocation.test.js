@@ -225,3 +225,93 @@ test('GUI de prova existente apresenta distribuição por disciplina e trava bim
   assert.match(elements.existingSubjectList.children[1].textContent, /Q16–Q20/);
   assert.deepEqual(state.existingSubjectPlan.mapping, plan.mapping);
 });
+
+
+test('sem limite informado pela API, não assume que a disciplina é ilimitada', () => {
+  const d = fixture();
+  delete d.aplicacao.coautores[0].qtd_questoes;
+  const planned = F.existingSubjectPlan(d, 123, questions(20));
+  assert.equal(planned.valid, false);
+  assert.match(planned.reason, /não informou a cota/);
+  assert.equal(F.verifyPendingCoauthorSubjects(d, 123, [
+    { uuid: 'new', padrao_disciplina_id: 140 }
+  ]).valid, false);
+});
+
+test('REGRESSÃO: sair do modo de prova existente restaura turmas, matéria, bimestre e datas anteriores', () => {
+  const source = enhancementsCode.slice(
+    enhancementsCode.indexOf('function toggleModes()'),
+    enhancementsCode.indexOf('function studentAudienceTemplate()')
+  );
+  const classChecks = [
+    { value:'10', checked:true, disabled:false },
+    { value:'11', checked:false, disabled:false },
+    { value:'12', checked:true, disabled:false }
+  ];
+  const el = {
+    useExistingAssessment: { checked: false },
+    studentsArea: { classList: {toggle(){},add(){} } },
+    existingArea: { classList: {toggle(){} } },
+    newAssessmentFields: { classList: {toggle(){} } },
+    specificStudents: { checked:false, disabled:false },
+    onlyQuestions: { checked:false, disabled:false },
+    subject: { value:'140', disabled:false },
+    term: { value:'18315', disabled:false, options:[{value:'18315'}] },
+    startDate: { value:'2026-12-01', disabled:false },
+    resultDate: { value:'2026-12-06', disabled:false },
+    inject: { textContent:'Criar no E-Class' }
+  };
+  const state = {
+    lastExistingMode:false, savedNewClasses:null, savedNewDestination:null,
+    existingLookupSeq:0, existingTarget:null, existingSubjectPlan:null
+  };
+  const document = {
+    querySelectorAll: selector => selector === '.classCheck:checked' ?
+      classChecks.filter(x=>x.checked) : selector === '.classCheck' ? classChecks : []
+  };
+  let rebuilt=0;
+  const toggle = new Function('state','$','document','renderExistingAudience',
+    'safe','loadExistingAudience','rebuildSelectors',
+    source + '\nreturn toggleModes;')(
+    state, id => el[id], document,
+    () => {},
+    () => {},
+    async () => {},
+    () => {
+      rebuilt++;
+      el.subject.value = '999';
+      el.term.value = '444';
+      for(const box of classChecks) box.checked=false;
+    }
+  );
+  el.useExistingAssessment.checked=true;
+  toggle();
+  assert.deepEqual(state.savedNewClasses,[10,12]);
+  assert.equal(state.savedNewDestination.subject,'140');
+  assert.equal(el.inject.textContent,'Adicionar questões à prova');
+  el.subject.value='390';
+  el.term.value='555';
+  el.startDate.value='2027-01-10';
+  el.resultDate.value='2027-01-12';
+  for(const box of classChecks) box.checked=box.value==='11';
+  el.useExistingAssessment.checked=false;
+  toggle();
+  assert.equal(rebuilt,1);
+  assert.deepEqual(classChecks.map(x=>x.checked),[true,false,true]);
+  assert.equal(el.subject.value,'140');
+  assert.equal(el.term.value,'18315');
+  assert.equal(el.startDate.value,'2026-12-01');
+  assert.equal(el.resultDate.value,'2026-12-06');
+  assert.equal(el.inject.textContent,'Criar no E-Class');
+  assert.equal(el.onlyQuestions.disabled,false);
+  assert.equal(el.specificStudents.disabled,false);
+});
+
+test('REGRESSÃO: modo de prova nova não consulta cotas nem altera público-alvo via seleção existente', () => {
+  const parse = fs.readFileSync(path.join(root,'panel-parse.js'),'utf8');
+  const core = fs.readFileSync(path.join(root,'panel-core.js'),'utf8');
+  assert.match(parse, /if \(!c\.existingMode && \(!c\.subjectId \|\| !c\.termId\)\)/);
+  assert.match(parse, /questionSubjectIds\?\.\[String\(q\.number\)\]/);
+  assert.match(core, /const selectedClasses = \$\('useExistingAssessment'\)\?\.checked &&/);
+  assert.match(core, /document\.querySelectorAll\('\.classCheck:checked'\)/);
+});
