@@ -68,11 +68,54 @@
     return delta >= 0 && delta <= days * 86400000;
   }
 
+  // GET /api/v1/avaliacao retorna {ret, data: {data: [...], last_page, ...}}.
+  // Cada avaliação pode ter mais de uma aplicação. O UUID usado em
+  // /api/v1/aplicacao-avaliacao/{uuid} pertence à aplicação, não à avaliação.
+  function assessmentListPage(response) {
+    const envelope = response && response.data && !Array.isArray(response.data) ? response.data : response;
+    if (!envelope || !Array.isArray(envelope.data)) {
+      throw new Error('Formato inesperado da listagem de avaliações.');
+    }
+    return {
+      rows: envelope.data,
+      currentPage: Number(envelope.current_page || 1),
+      lastPage: Number(envelope.last_page || 1),
+      total: Number(envelope.total || envelope.data.length)
+    };
+  }
+
+  function applicationCandidates(rows) {
+    const options = [];
+    for (const exam of rows || []) {
+      if (!exam || !Array.isArray(exam.aplicacoes)) continue;
+      for (const app of exam.aplicacoes) {
+        if (!app || !app.uuid) continue;
+        options.push({
+          id: String(app.uuid),
+          evaluationId: String(exam.uuid || ''),
+          title: String(exam.titulo || 'Prova sem título'),
+          scheduledDate: String(app.data_inicio || exam.aplicacoes_min_data_inicio || ''),
+          status: app.status,
+          raw: app
+        });
+      }
+    }
+    return options;
+  }
+
   function detailPayload(response) {
     const value = response && response.data ? response.data : response;
     if (!value || typeof value !== 'object') return null;
-    const p = value.aplicacao && value.avaliacao && Array.isArray(value.questoes) ? value : null;
-    return p;
+    if (value.aplicacao && value.avaliacao && Array.isArray(value.questoes)) return value;
+
+    // Forma comprovada pelo HAR: data = { uuid, created_at, publico_alvo,
+    // avaliacao: { uuid, questoes: [...] }, ...dadosDaAplicacao }.
+    if (value.avaliacao && typeof value.avaliacao === 'object' &&
+        Array.isArray(value.avaliacao.questoes) && value.uuid) {
+      const { avaliacao, ...aplicacao } = value;
+      return { aplicacao, avaliacao, questoes: avaliacao.questoes };
+    }
+    return null;
   }
 
   function isAssessmentActive(detail) {
@@ -80,9 +123,10 @@
     const exam = detail.avaliacao || {};
     const responseCounts = [
       app.total_respostas, app.qtd_respostas, app.quantidade_respostas,
+      app.tentativa_count,
       exam.total_respostas, detail.total_respostas
     ];
-    return app.status === true || app.status === 1 ||
+    return app.status === true || app.status === 1 || app.encerrada === true || app.encerrada === 1 ||
       responseCounts.some(n => Number(n) > 0) ||
       (Array.isArray(detail.respostas) && detail.respostas.length > 0);
   }
@@ -163,6 +207,7 @@
   return {
     figureTags, replaceFigureTags, extractRows, assessmentRecord,
     withinDays, detailPayload, isAssessmentActive, mergeAssessment,
-    studentsFromClasses, makeIndividualAudience, questionId
+    studentsFromClasses, makeIndividualAudience, questionId,
+    assessmentListPage, applicationCandidates
   };
 });
