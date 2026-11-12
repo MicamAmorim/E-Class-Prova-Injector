@@ -28,6 +28,7 @@ function bind() {
   $('detectSession').addEventListener('click', () => safe(detectSession));
   $('loadPortalData').addEventListener('click', () => safe(loadPortalData));
   $('clearFile').addEventListener('click', () => {
+    clearFolderSelection();
     state.latex = ''; state.fileName = null; state.parsed = []; state.figureBindings = {}; state.macroMap = new Map(); $('texFile').value = ''; $('preview').innerHTML = 'Analise um arquivo .tex para visualizar as questões.'; $('preview').className = 'preview empty'; $('analysisSummary').textContent = 'Nenhum arquivo analisado.'; $('questionCount').textContent = '0 questões';
   });
   enhancementsBind();
