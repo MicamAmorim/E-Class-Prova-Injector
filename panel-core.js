@@ -3,6 +3,20 @@
 const API = {
   question: 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/questao',
   assessment: 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/aplicacao-avaliacao',
+  // Capturado no HAR do portal (GET): a lista é /avaliacao, não /aplicacao-avaliacao.
+  assessmentList: (config, page = 1, pageSize = 25) => {
+    const entity = { id: config.entityId, nome: config.entityName, tipo: config.entityType, externo: false };
+    const params = new URLSearchParams({
+      editora_id: String(config.publisher),
+      entidade: JSON.stringify(entity),
+      ano: String(config.academicYear),
+      page: String(page),
+      page_size: String(pageSize),
+      tipo_gerenciada_except: '3',
+      orderBy: '1'
+    });
+    return 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/avaliacao?' + params.toString();
+  },
   mathUpload: 'https://ti5v892yac.execute-api.sa-east-1.amazonaws.com/develop/upload',
   terms: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/bimestres?entity_id=${encodeURIComponent(entityId)}`,
   classes: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/school-groups?strict_user=true&entity_id=${encodeURIComponent(entityId)}`,
