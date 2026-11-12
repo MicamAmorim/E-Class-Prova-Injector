@@ -49,9 +49,19 @@ async function saveRunHistory(status, c, error = null, assessmentResponse = null
     title: c.title,
     fileName: state.fileName,
     config: { ...c, dryRun: undefined, students: undefined },
+    // Histórico não duplica imagens em base64 nem dados completos da avaliação.
     pendingOperation: state.pendingOperation ? { ...state.pendingOperation } : null,
     createdQuestions: state.createdQuestions,
-    assessmentPayload: state.lastAssessmentPayload,
+    assessmentPayload: state.lastAssessmentPayload ? {
+      aplicacao: { uuid: state.lastAssessmentPayload.aplicacao?.uuid || null },
+      avaliacao: {
+        uuid: state.lastAssessmentPayload.avaliacao?.uuid || null,
+        titulo: state.lastAssessmentPayload.avaliacao?.titulo || null
+      },
+      questoes: (state.lastAssessmentPayload.questoes || []).map(q => ({
+        uuid: q.uuid, code: q.code, peso: q.peso
+      }))
+    } : null,
     assessmentResponse,
     error: error ? { message: error.message, status: error.status, data: error.data } : null
   };
@@ -228,9 +238,12 @@ async function inject() {
       return;
     }
 
+    const context = {
+      entityId: c.entityId, profileId: c.profileId, academicYear: c.academicYear
+    };
     state.pendingOperation = c.existingMode ?
-      { type: 'update', method: 'PUT', url: targetAssessmentUrl(uuid), id: uuid } :
-      { type: 'create', method: 'POST', url: API.assessment };
+      { type: 'update', method: 'PUT', url: targetAssessmentUrl(uuid), id: uuid, context } :
+      { type: 'create', method: 'POST', url: API.assessment, context };
     if (!c.existingMode) state.lastAssessmentPayload = assessmentPayload(c, state.createdQuestions);
     // No modo de atualização, os UUIDs já criados ficam pendentes antes de
     // reconsultar a prova. Uma falha de rede não exigirá recriar as questões.
@@ -261,6 +274,10 @@ async function retryAssessment() {
   if (!tokenForRequest()) throw new Error('Sessão indisponível.');
   const c = formConfig();
   const operation = state.pendingOperation || { type: 'create', method: 'POST', url: API.assessment };
+  if (operation.context && ['entityId', 'profileId', 'academicYear'].some(key =>
+    Number(operation.context[key]) !== Number(c[key]))) {
+    throw new Error('O contexto do portal mudou desde a pendência. Volte à mesma entidade, perfil e ano antes de reenviar.');
+  }
   const title = state.lastAssessmentPayload?.avaliacao?.titulo || operation.id || c.title;
   const ok = confirm('Reenviar a operação de ' + (operation.type === 'update' ? 'atualização' : 'criação') +
     ' da prova “' + title + '”, reutilizando ' + state.createdQuestions.length + ' questões já criadas?');
