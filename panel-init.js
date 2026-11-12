@@ -33,6 +33,7 @@ function bind() {
   });
   enhancementsBind();
   bindFolderImport();
+  omrExportBind();
   $('copyLog').addEventListener('click', async () => { await navigator.clipboard.writeText($('log').textContent); log('Log copiado.', 'ok'); });
   document.querySelectorAll('.advanced input, #sectionName').forEach(el => el.addEventListener('change', persistConfig));
 }
