@@ -243,7 +243,17 @@
       if (assignment.limit == null) group.unlimited = true;
       else group.limit += Math.max(0, assignment.limit);
     }
+    const exam = detail?.avaliacao || detail?.aplicacao?.avaliacao || {};
+    const examOrder = Array.isArray(exam.avaliacao_disciplinas) ?
+      exam.avaliacao_disciplinas.map(x => Number(x && typeof x === 'object' ?
+        x.padrao_disciplina_id : x)) : [];
     const assignments = [...grouped.values()];
+    if (examOrder.length) assignments.sort((a, b) => {
+      const ia = examOrder.indexOf(a.subjectId);
+      const ib = examOrder.indexOf(b.subjectId);
+      return (ia < 0 ? Number.MAX_SAFE_INTEGER : ia) -
+        (ib < 0 ? Number.MAX_SAFE_INTEGER : ib);
+    });
     for (const group of assignments) {
       group.alreadyLinked = existing.filter(q => {
         const author = q.criado_por ?? q.dadosGerais?.criado_por ?? q.user_id;
