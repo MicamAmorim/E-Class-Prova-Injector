@@ -194,7 +194,7 @@ async function submitAssessmentOperation(c) {
 }
 
 async function inject() {
-  analyzeLatex();
+  await analyzeLatex();
   const c = formConfig();
   validate(c);
   if (c.dryRun) return simulate();
