@@ -40,7 +40,13 @@ function renderPreview() {
     const card = document.createElement('div');
     card.className = 'qcard';
     const corr = q.correct == null ? '⚠ sem gabarito' : String.fromCharCode(65 + q.correct);
-    card.innerHTML = `<div class="qhead"><span>Q${q.number}</span><span>correta: ${corr}</span></div><div class="qraw">${escapeHtml(q.stem)}</div><ol type="A">${q.choices.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ol>`;
+    const allocation = state.existingSubjectPlan?.valid &&
+      $('useExistingAssessment').checked ?
+      state.existingSubjectPlan.entries.find(x => String(x.number) === String(q.number)) : null;
+    const questionLabel = allocation ?
+      'Q' + q.number + ' · ' + escapeHtml(allocation.subjectName) :
+      'Q' + q.number;
+    card.innerHTML = `<div class="qhead"><span>${questionLabel}</span><span>correta: ${corr}</span></div><div class="qraw">${escapeHtml(q.stem)}</div><ol type="A">${q.choices.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ol>`;
     $('preview').appendChild(card);
     renderFigurePreview(q, card);
   }
@@ -61,6 +67,7 @@ async function analyzeLatex() {
   if (missing.length) log(`Gabarito ausente nas questões: ${missing.join(', ')}`, 'warn');
   else log(`LaTeX analisado: ${state.parsed.length} questões com gabarito.`, 'ok');
   await autoBindImageFiles();
+  if ($('useExistingAssessment').checked) renderExistingAudience();
   renderPreview();
 }
 
@@ -105,13 +112,18 @@ async function latexFragmentToHtml(raw, doNetwork, questionNumber = null) {
 }
 
 function questionPayload(c, q, stemHtml, choicesHtml) {
+  const subjectId = c.existingMode ?
+    Number(c.questionSubjectIds?.[String(q.number)]) : c.subjectId;
+  if (!Number.isSafeInteger(subjectId) || subjectId <= 0) {
+    throw new Error('Q' + q.number + ': disciplina não atribuída à questão.');
+  }
   return {
     dadosGerais: {
       uuid: null, parent_uuid: null, code: null, tipo: 0,
       enunciado: stemHtml, nivel_complexidade: 0,
       publishing_id: c.publishingId, texto_base_id: null,
       sociodemografica: 0, status: 1, validada: 1,
-      pais_id: c.countryId, padrao_disciplina_id: c.subjectId,
+      pais_id: c.countryId, padrao_disciplina_id: subjectId,
       padrao_serie_id: null, nivel_id: c.levelId, categories: [], matrix_id: null,
       compartilhada: 0, tri_a: null, tri_b: null, tri_c: null,
       orientacao: null, taxonomia_bloom: null, uc: false
@@ -176,7 +188,20 @@ function validate(c) {
   if (!c.existingMode && (!c.startDate || !c.resultDate)) throw new Error('Informe as datas.');
   if (!c.existingMode && new Date(c.resultDate) < new Date(c.startDate)) throw new Error('A data de resultado é anterior à data inicial.');
   if (!c.existingMode && !c.classes.length) throw new Error('Selecione pelo menos uma turma.');
-  if (!c.subjectId || (!c.existingMode && !c.termId)) throw new Error('Disciplina e bimestre são obrigatórios.');
+  if (!c.existingMode && (!c.subjectId || !c.termId)) {
+    throw new Error('Disciplina e bimestre são obrigatórios.');
+  }
+  if (c.existingMode) {
+    const plan = state.existingSubjectPlan;
+    if (!state.existingTarget || state.existingTarget.id !== c.targetAssessmentId ||
+        !plan?.valid || plan.entries.length !== state.parsed.length) {
+      throw new Error('A distribuição das questões por disciplina não está validada. ' +
+        (plan?.reason || 'Selecione a prova existente e aguarde os dados de coautoria.'));
+    }
+    if (state.parsed.some(q => !c.questionSubjectIds?.[String(q.number)])) {
+      throw new Error('Há questões sem disciplina atribuída.');
+    }
+  }
   const missing = state.parsed.filter(q => q.correct == null);
   if (missing.length) throw new Error(`Falta gabarito nas questões: ${missing.map(x => x.number).join(', ')}`);
   validateEnhancements(c);
