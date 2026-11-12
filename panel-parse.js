@@ -53,6 +53,9 @@ async function fileChanged(file) {
   state.parsed = [];
   state.figureBindings = {};
   state.latex = file ? await file.text() : '';
+  $('preview').textContent = 'Clique “Analisar LaTeX” para atualizar a prévia.';
+  $('preview').classList.add('empty');
+  $('questionCount').textContent = '0 questões';
   $('analysisSummary').textContent = file ? `${file.name} carregado. Clique “Analisar LaTeX”.` : 'Nenhum arquivo analisado.';
 }
 
