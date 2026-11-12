@@ -217,30 +217,103 @@ async function loadExistingAssessments() {
   if (!tokenForRequest()) throw new Error('Detecte sua sessão para consultar as provas.');
   const days = Number($('assessmentDays').value);
   if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('Use um período de 1 a 365 dias.');
+
+  const button = $('loadAssessments');
+  button.disabled = true;
+  const status = $('assessmentListStatus');
+  const previousId = targetAssessmentId();
+  const c = formConfig();
   const records = new Map();
+  let pagesLoaded = 0, totalReturned = 0, detailErrors = 0, withoutDate = 0;
+  let listError = null, truncated = false;
+
   try {
-    const response = await apiFetch(API.assessment, { headers: portalHeaders(false) });
-    for (const raw of EClassFeatures.extractRows(response)) {
-      const rec = EClassFeatures.assessmentRecord(raw);
-      if (rec && EClassFeatures.withinDays(rec, days)) records.set(rec.id, rec);
+    const collected = [];
+    try {
+      // O HAR confirma GET /api/v1/avaliacao, com {data: {data: [], last_page}}.
+      for (let page = 1; page <= 30; page++) {
+        status.textContent = 'Consultando página ' + page + ' de avaliações...';
+        const response = await apiFetch(API.assessmentList(c, page, 25), { headers: portalHeaders(false) });
+        const result = EClassFeatures.assessmentListPage(response);
+        if (result.currentPage !== page) throw new Error('O servidor retornou uma página diferente da solicitada.');
+        pagesLoaded++;
+        totalReturned = result.total;
+        collected.push(...EClassFeatures.applicationCandidates(result.rows));
+        if (page >= result.lastPage) break;
+        if (page === 30) truncated = true;
+      }
+    } catch (e) {
+      listError = e;
+      log('Não foi possível concluir a consulta das avaliações: ' + e.message, 'warn');
     }
-  } catch (e) {
-    log('A lista remota de provas não foi disponibilizada por esta rota: ' + e.message, 'warn');
-  }
-  const { eciHistory = [] } = await chrome.storage.local.get({ eciHistory: [] });
-  for (const run of eciHistory) {
-    const rec = EClassFeatures.assessmentRecord(run.assessmentResponse);
-    if (rec && EClassFeatures.withinDays({ ...rec, date: run.at }, days) && !records.has(rec.id)) {
-      records.set(rec.id, { ...rec, date: run.at });
+
+    const candidates = [...new Map(collected.map(a => [a.id, a])).values()];
+    status.textContent = candidates.length + ' aplicações encontradas. Verificando datas de criação...';
+
+    // A resposta da lista não tem created_at. GET da aplicação retorna a
+    // data de criação e permite aplicar corretamente o filtro de N dias.
+    const batchSize = 4;
+    for (let i = 0; i < candidates.length; i += batchSize) {
+      const batch = candidates.slice(i, i + batchSize);
+      await Promise.all(batch.map(async candidate => {
+        try {
+          const response = await apiFetch(targetAssessmentUrl(candidate.id), { headers: portalHeaders(false) });
+          const raw = response && response.data ? response.data : response;
+          if (String(raw?.uuid || '') !== candidate.id) throw new Error('O detalhe não corresponde à aplicação.');
+          const date = raw.created_at || raw.data_criacao || '';
+          if (!date) { withoutDate++; return; }
+          const rec = {
+            id: candidate.id, title: candidate.title,
+            date: String(date), scheduledDate: candidate.scheduledDate,
+            active: EClassFeatures.isAssessmentActive(
+              EClassFeatures.detailPayload(response) || { aplicacao: raw, avaliacao: {} }
+            )
+          };
+          if (EClassFeatures.withinDays(rec, days)) records.set(rec.id, rec);
+        } catch (_) { detailErrors++; }
+      }));
+      status.textContent = 'Verificando criação: ' + Math.min(i + batchSize, candidates.length) +
+        '/' + candidates.length + ' aplicações...';
     }
+
+    // Fallback histórico: os dados salvos podem ser de uma versão anterior
+    // da extensão. A consulta real, quando disponível, tem precedência.
+    const { eciHistory = [] } = await chrome.storage.local.get({ eciHistory: [] });
+    for (const run of eciHistory) {
+      const rec = EClassFeatures.assessmentRecord(run.assessmentResponse);
+      if (rec && !records.has(rec.id) &&
+          EClassFeatures.withinDays({ ...rec, date: run.at || rec.date }, days)) {
+        records.set(rec.id, { ...rec, date: run.at || rec.date, historyOnly: true });
+      }
+    }
+
+    const list = [...records.values()].sort((a, b) => b.date.localeCompare(a.date));
+    $('existingAssessments').replaceChildren(new Option('Selecione uma prova', ''));
+    for (const rec of list) {
+      const dateValue = new Date(rec.date.replace(' ', 'T'));
+      const humanDate = Number.isNaN(dateValue.getTime()) ? rec.date.slice(0, 10) :
+        dateValue.toLocaleDateString('pt-BR');
+      const label = rec.title + ' · criada em ' + humanDate +
+        (rec.active ? ' · ATIVA (edição bloqueada)' : '') +
+        (rec.historyOnly ? ' · histórico local' : '');
+      const option = new Option(label, rec.id);
+      option.disabled = Boolean(rec.active);
+      $('existingAssessments').add(option);
+      if (rec.id === previousId && !rec.active) option.selected = true;
+    }
+
+    const warnings = [];
+    if (truncated) warnings.push('resultado limitado às primeiras 30 páginas');
+    if (listError) warnings.push('falha parcial/total na consulta de páginas');
+    if (detailErrors) warnings.push(detailErrors + ' detalhe(s) não acessíveis');
+    if (withoutDate) warnings.push(withoutDate + ' aplicação(ões) sem data de criação');
+    status.textContent = list.length + ' prova(s) criada(s) nos últimos ' + days +
+      ' dias · ' + pagesLoaded + ' página(s), ' + totalReturned + ' avaliação(ões) no portal' +
+      (warnings.length ? ' · ' + warnings.join('; ') : '') + '.';
+    log(status.textContent, warnings.length ? 'warn' : 'ok');
+  } finally {
+    button.disabled = false;
   }
-  const list = [...records.values()].sort((a, b) => b.date.localeCompare(a.date));
-  $('existingAssessments').replaceChildren(new Option('Selecione uma prova', ''));
-  for (const rec of list) {
-    $('existingAssessments').add(new Option(rec.title + ' · ' + rec.date.slice(0, 10), rec.id));
-  }
-  $('assessmentListStatus').textContent = list.length + ' prova(s) encontradas no período. Se necessário, informe o UUID manualmente.';
-  log('Consulta de avaliações concluída: ' + list.length + ' resultado(s).', 'ok');
 }
 
 function validateEnhancements(c) {
