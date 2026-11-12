@@ -12,7 +12,7 @@
       <h1>E-Class Prova Injector</h1>
       <p>LaTeX → questões → prova no E-Class</p>
     </div>
-    <span id="version">v0.1.1</span>
+    <span id="version">v0.2.6</span>
   </header>
 
   <main>
@@ -28,16 +28,47 @@
     </section>
 
     <section class="card">
-      <h2>1. Arquivo LaTeX</h2>
+      <h2>1. Arquivo da prova</h2>
+      <label class="toggle"><input id="useExistingAssessment" type="checkbox"> Adicionar questões a uma prova já criada (sem criar nova avaliação)</label>
+      <div id="existingArea" class="hidden subpanel">
+        <div class="row wrap">
+          <label>Aplicações criadas nos últimos (dias)
+            <input id="assessmentDays" type="number" min="1" max="365" value="15">
+          </label>
+          <button id="loadAssessments" class="secondary">Listar provas</button>
+        </div>
+        <label>Provas encontradas
+          <select id="existingAssessments"><option value="">Selecione uma prova</option></select>
+        </label>
+        <label>UUID da aplicação (pode ser informado manualmente)
+          <input id="existingAssessmentId" placeholder="UUID da aplicação (não da avaliação)">
+        </label>
+        <p id="assessmentListStatus" class="hint">A lista será preenchida mesmo se a consulta de detalhes falhar; nesse caso, a data de criação ficará como não verificada. É possível ampliar o período até 365 dias. Provas ativas ou com respostas não podem ser alteradas.</p>
+        <div id="existingAudiencePanel" class="subpanel">
+          <strong>Turmas já vinculadas à prova</strong>
+          <div id="existingAudienceList" class="checks" aria-live="polite"></div>
+          <p id="existingAudienceStatus" class="hint">Escolha uma prova para carregar as turmas registradas no E-Class. Até confirmar as permissões, a seleção local ficará bloqueada.</p>
+        </div>
+      </div>
       <label class="filebox">
-        <span>Selecionar arquivo .tex</span>
+        <span>Selecionar pasta da prova (.tex + imagens) — recomendado</span>
+        <input id="folderFile" type="file" webkitdirectory directory multiple>
+      </label>
+      <div id="folderTexArea" class="hidden">
+        <label>Arquivo .tex encontrado na pasta
+          <select id="folderTexChoice"></select>
+        </label>
+      </div>
+      <label class="filebox">
+        <span>Ou selecionar apenas um arquivo .tex (sem acesso automático à pasta)</span>
         <input id="texFile" type="file" accept=".tex,text/x-tex,text/plain">
       </label>
+      <p id="figureImportStatus" class="hint">Selecione a pasta da prova para carregar imagens automaticamente, inclusive das alternativas.</p>
       <div class="grid2">
         <label>Seção da prova
           <input id="sectionName" value="MATEMÁTICA">
         </label>
-        <label>Título no E-Class
+        <label id="newAssessmentFields">Título no E-Class
           <input id="title" value="TESTE INJECTOR - APAGAR">
         </label>
       </div>
@@ -54,7 +85,7 @@
         <button id="loadPortalData" class="secondary">Carregar do portal</button>
       </div>
       <div class="grid2">
-        <label>Disciplina
+        <label id="subjectSelectLabel">Disciplina
           <select id="subject"></select>
         </label>
         <label>Bimestre
@@ -67,8 +98,28 @@
           <input id="resultDate" type="date">
         </label>
       </div>
+      <div id="existingSubjectPanel" class="subpanel hidden">
+        <strong>Distribuição automática por disciplina da prova existente</strong>
+        <div id="existingSubjectList" class="checks" aria-live="polite"></div>
+        <p id="existingSubjectStatus" class="hint">As cotas de coautoria serão carregadas da aplicação e atribuídas às questões na ordem do LaTeX.</p>
+        <p id="existingCalendarStatus" class="hint">Bimestre e datas: aguardando seleção da aplicação.</p>
+      </div>
       <label class="block">Turmas</label>
+      <p id="classesLockStatus" class="hint">Para uma prova já criada, as turmas serão consultadas no E-Class. A seleção abaixo é apenas informativa.</p>
       <div id="classes" class="checks"></div>
+      <label class="toggle"><input id="specificStudents" type="checkbox"> Enviar somente para alunos específicos das turmas selecionadas</label>
+      <div id="studentsArea" class="hidden subpanel">
+        <p id="studentRosterStatus" class="hint"></p>
+        <div id="studentRoster" class="checks"></div>
+        <label>IDs dos alunos (se não vierem na consulta das turmas)
+          <textarea id="studentIds" rows="3" placeholder="turma_id;aluno_id (um por linha)&#10;Com uma única turma selecionada, basta o ID do aluno"></textarea>
+        </label>
+        <details>
+          <summary>Modelo de público individual validado (obrigatório para envio real)</summary>
+          <p class="hint">Por segurança, a extensão não presumirá a estrutura de destinatários individuais: se o portal ignorar um campo desconhecido, a prova poderia atingir toda a turma. Forneça um objeto JSON compatível com o público individual de uma turma, obtido de uma aplicação oficial. Variáveis aceitas: {{turma_id}}, {{entidade_id}}, {{alunos_ids}}, {{alunos_objetos}}.</p>
+          <textarea id="studentAudienceTemplate" rows="5" spellcheck="false" placeholder='Exemplo ilustrativo, NÃO validado: {"turma_id":"{{turma_id}}","entidade_id":"{{entidade_id}}","alunos":"{{alunos_objetos}}"}'></textarea>
+        </details>
+      </div>
     </section>
 
     <details class="card">
@@ -100,12 +151,28 @@
         <button id="simulate" class="secondary">Simular payload</button>
         <button id="inject" class="danger">Criar no E-Class</button>
         <button id="retryAssessment" class="ghost" disabled>Reenviar só a prova</button>
+        <button id="inspectPending" class="secondary" disabled>Verificar vínculo pendente (sem gravar)</button>
         <button id="clearPending" class="ghost" disabled>Limpar pendência</button>
       </div>
+      <p id="pendingInspectionStatus" class="hint">Verificação somente de leitura: confere se as questões pendentes já aparecem na prova.</p>
       <div id="progressWrap" class="progress-wrap hidden">
         <div id="progressBar" class="progress"></div>
         <div id="progressText"></div>
       </div>
+    </section>
+
+    <section class="card">
+      <div class="row space wrap">
+        <div>
+          <h2>4. Corretor de gabaritos</h2>
+          <p class="hint">Exporta apenas as respostas das questões objetivas para o nosso Corretor (.eclass-omr.json). Funciona sem criar ou atualizar prova no E-Class.</p>
+        </div>
+        <button id="exportOmr" class="secondary" type="button">Exportar para Corretor</button>
+      </div>
+      <label>Título do gabarito (opcional; usa o título da prova se deixado em branco)
+        <input id="omrTitle" type="text" placeholder="Ex.: Prova de Matemática – 4º bimestre">
+      </label>
+      <p id="omrExportStatus" class="hint">Analise a prova para liberar a exportação.</p>
     </section>
 
     <section class="card">
@@ -126,9 +193,15 @@
   </main>
 
   <script src="parser.js"></script>
+  <script src="features.js"></script>
+  <script src="image-import.js"></script>
   <script src="panel-core.js"></script>
   <script src="panel-parse.js"></script>
+  <script src="panel-enhancements.js"></script>
+  <script src="panel-image-import.js"></script>
   <script src="panel-run.js"></script>
+  <script src="omr-export.js"></script>
+  <script src="panel-omr.js"></script>
   <script src="panel-init.js"></script>
 </body>
 </html>

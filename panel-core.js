@@ -3,9 +3,25 @@
 const API = {
   question: 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/questao',
   assessment: 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/aplicacao-avaliacao',
+  currentUser: 'https://api-usuario.educacaoadventista.org.br/api/v1/dados-usuario',
+  // Capturado no HAR do portal (GET): a lista é /avaliacao, não /aplicacao-avaliacao.
+  assessmentList: (config, page = 1, pageSize = 25) => {
+    const entity = { id: config.entityId, nome: config.entityName, tipo: config.entityType, externo: false };
+    const params = new URLSearchParams({
+      editora_id: String(config.publisher),
+      entidade: JSON.stringify(entity),
+      ano: String(config.academicYear),
+      page: String(page),
+      page_size: String(pageSize),
+      tipo_gerenciada_except: '3',
+      orderBy: '1'
+    });
+    return 'https://api-avaliacoes.educacaoadventista.org.br/api/v1/avaliacao?' + params.toString();
+  },
   mathUpload: 'https://ti5v892yac.execute-api.sa-east-1.amazonaws.com/develop/upload',
   terms: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/bimestres?entity_id=${encodeURIComponent(entityId)}`,
   classes: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/school-groups?strict_user=true&entity_id=${encodeURIComponent(entityId)}`,
+  students: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/entity/${encodeURIComponent(entityId)}/students?strict_user=true`,
   subjects: entity => `https://api-usuario.educacaoadventista.org.br/api/v1/hub-educacional/padrao/1/disciplinas?entity=${encodeURIComponent(JSON.stringify(entity))}&strict_user=true`
 };
 
@@ -109,7 +125,10 @@ async function apiFetch(url, { method = 'GET', headers = {}, body = null } = {})
 }
 
 function formConfig() {
-  const selectedClasses = [...document.querySelectorAll('.classCheck:checked')].map(x => Number(x.value));
+  const selectedClasses = $('useExistingAssessment')?.checked &&
+    state.existingTarget?.id === targetAssessmentId() ?
+    [...state.existingTarget.audience.classIds] :
+    [...document.querySelectorAll('.classCheck:checked')].map(x => Number(x.value));
   return {
     academicYear: Number($('academicYear').value),
     association: Number($('association').value),
@@ -131,7 +150,8 @@ function formConfig() {
     startDate: $('startDate').value,
     resultDate: $('resultDate').value,
     dryRun: $('dryRun').checked,
-    onlyQuestions: $('onlyQuestions').checked
+    onlyQuestions: $('onlyQuestions').checked,
+    ...enhancementsFormConfig()
   };
 }
 
@@ -140,13 +160,12 @@ function tokenForRequest() {
   return manual || state.token;
 }
 
-function portalHeaders(contentType = true) {
+function portalHeaders(contentType = true, requireToken = true) {
   const c = formConfig();
   const token = tokenForRequest();
-  if (!token) throw new Error('Sessão não detectada. Abra o E-Class, clique “Detectar sessão” ou informe o token manualmente.');
+  if (!token && requireToken) throw new Error('Sessão não detectada. Abra o E-Class, clique “Detectar sessão” ou informe o token manualmente.');
   const h = {
     accept: 'application/json, text/plain, */*',
-    authorization: `Bearer ${token}`,
     'content-language': 'pt-BR',
     'x-portal-academic-year': String(c.academicYear),
     'x-portal-association': String(c.association),
@@ -156,6 +175,7 @@ function portalHeaders(contentType = true) {
     'x-portal-publisher': String(c.publisher),
     'x-portal-union': String(c.union)
   };
+  if (token) h.authorization = `Bearer ${token}`;
   if (contentType) h['content-type'] = 'application/json';
   return h;
 }
