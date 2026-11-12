@@ -1,4 +1,4 @@
-# E-Class Prova Injector — Edge v0.2.2
+# E-Class Prova Injector — Edge v0.2.3
 
 Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questões objetivas e gabarito, converte as fórmulas LaTeX usando o mesmo endpoint observado no E-Class e cria as questões / avaliação pelas APIs usadas pelo próprio portal.
 
@@ -177,3 +177,11 @@ O HAR confirmou **HTTP 200** para `GET /api/v1/avaliacao` e a resposta paginada 
 Cada avaliação possui um array `aplicacoes`. O seletor representa **cada aplicação** por seu próprio UUID, pois a rota de detalhe é `GET /api/v1/aplicacao-avaliacao/{uuid}`. Os detalhes contêm a data real de criação em `created_at` e a avaliação aninhada em `avaliacao`. O filtro retroativo (15 dias por padrão) considera **criação**, não `data_inicio` agendada. A extensão consulta os detalhes em grupos de quatro requisições e exibe alertas se alguma consulta falhar. Aplicações ativas, encerradas ou com tentativas são identificadas como não editáveis.
 
 A criação de questões e a tentativa de atualização via PUT permanecem em fase experimental: o HAR comprova apenas as rotas GET de listagem e detalhe, **não o contrato de escrita**. Novos testes sintéticos verificam paginação, UUID de aplicação, data de criação e bloqueio de avaliações ativas. Nenhum dado do HAR foi incorporado ao repositório.
+
+### 6. Listagem resiliente e diagnóstico (v0.2.3)
+
+Correção para listagem vazia mesmo com a versão 0.2.2 instalada. A versão anterior ocultava todas as aplicações quando `GET /api/v1/aplicacao-avaliacao/{uuid}` falhava, pois exigia `created_at` para incluir a prova no seletor. Agora, **os resultados da listagem paginada são exibidos primeiro**. A consulta individual complementa a data de criação, marca aplicações ativas/encerradas e elimina apenas datas verificadas que estejam fora do período. Se a consulta individual falhar, o item permanece com o aviso **criação não verificada**; sua edição continua sujeita à verificação do GET antes de qualquer escrita.
+
+A consulta de leitura não exige localmente um token Bearer, pois ele pode não estar disponível para a extensão. O servidor do E-Class continua responsável por autorizar o GET. **Toda escrita permanece com token e confirmação.** Falhas na listagem são mostradas na própria interface com código HTTP e sugestão de verificar sessão, entidade e ano. Falhas 401/403/429 nas consultas de detalhes interrompem novas solicitações após o lote em andamento, sem apagar provas já listadas.
+
+Validação: testes simulados cobrem paginação, filtros, perda de acesso aos detalhes, ausência de token em consultas de leitura e preservação da proteção das requisições de escrita. A integração real com o portal deve ser confirmada no Edge do usuário. **A operação PUT de atualização de uma prova ainda não foi verificada pelo HAR.**
