@@ -112,3 +112,55 @@ test('painel possui bloco de turmas oficiais e seleção bloqueada no modo exist
   assert.match(source, /EClassFeatures\.assessmentAudience/);
   assert.match(init, /enhancementsBind/);
 });
+
+
+test('carregamento de uma aplicação desativa seleção de turmas e bloqueia adicionar para não proprietário', async () => {
+  const checkboxes = [
+    { value: '10', checked: false, disabled: false },
+    { value: '11', checked: false, disabled: false },
+    { value: '12', checked: true, disabled: false }
+  ];
+  const audienceItems = {
+    children: [],
+    replaceChildren() { this.children = []; },
+    appendChild(x) { this.children.push(x); }
+  };
+  const ui = {
+    useExistingAssessment: { checked: true },
+    existingAssessmentId: { value: 'app-1' },
+    existingAssessments: { value: '' },
+    existingAudienceList: audienceItems,
+    existingAudienceStatus: { textContent: '' },
+    classesLockStatus: { textContent: '' },
+    inject: { disabled: false }
+  };
+  const state = { remote: {}, figureBindings: {}, existingTarget: null, existingLookupSeq: 0 };
+  const document = {
+    querySelectorAll: selector => selector === '.classCheck' ? checkboxes : [],
+    createElement: () => ({ textContent: '' })
+  };
+  const source = fs.readFileSync(path.resolve(__dirname, '../panel-enhancements.js'), 'utf8');
+  const module = new Function(
+    'state', '$', 'document', 'EClassFeatures', 'API',
+    'apiFetch', 'portalHeaders', 'log',
+    source + '\nreturn {loadExistingAudience, renderExistingAudience};'
+  )(
+    state, id => ui[id], document, F,
+    { assessment: 'https://example.org/api/v1/aplicacao-avaliacao' },
+    async url => {
+      assert.match(url, /\/app-1$/);
+      const d = existingDetail();
+      return { data: {
+        ...d.aplicacao, avaliacao: { ...d.avaliacao, questoes: d.questoes }
+      }};
+    },
+    () => ({}), () => {}
+  );
+  await module.loadExistingAudience();
+  assert.deepEqual(checkboxes.map(x => x.checked), [true,true,false]);
+  assert.ok(checkboxes.every(x => x.disabled));
+  assert.equal(ui.inject.disabled, true);
+  assert.equal(audienceItems.children.length, 2);
+  assert.match(ui.existingAudienceStatus.textContent, /não confirma permissão/);
+  assert.equal(state.existingTarget.id, 'app-1');
+});
