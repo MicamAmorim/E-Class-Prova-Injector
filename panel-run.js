@@ -139,7 +139,7 @@ async function fetchExistingAssessment(uuid) {
   return detail;
 }
 
-function assertExistingQuestionAccess(detail) {
+function assertExistingQuestionAccess(detail, options = {}) {
   if (EClassFeatures.isAssessmentActive(detail)) {
     throw new Error('A prova está ativa, encerrada ou possui tentativas. Atualização bloqueada.');
   }
@@ -147,14 +147,36 @@ function assertExistingQuestionAccess(detail) {
   if (!audience.verified) {
     throw new Error('Não foi possível verificar as turmas oficiais da aplicação; nenhuma questão nova será criada.');
   }
-  const rights = EClassFeatures.assessmentPermissions(detail);
-  // is_owner:false NÃO autoriza inferir coautoria editável. Não usar um
-  // erro 500 do servidor como "prova" de que a escrita foi negada: o
-  // contrato do PUT também pode estar incorreto.
-  if (!rights.canEditQuestions && !rights.isOwner) {
-    throw new Error('O E-Class não confirmou permissão de editar as questões desta aplicação ' +
-      '(is_owner=false ou não informado). Nenhuma questão será criada e a pendência existente foi preservada. ' +
-      'Peça à coordenação a confirmação de acesso de edição.');
+  const rights = EClassFeatures.assessmentPermissions(detail, state.currentPortalUserId);
+  if (!rights.canEditQuestions) {
+    throw new Error('A sessão não foi identificada como proprietária nem como coautora autorizada para esta prova. ' +
+      'Nenhuma questão adicional será criada. Atualize a sessão e selecione novamente a avaliação.');
+  }
+  if (rights.isCoauthor) {
+    const count = Number(options.questionCount || 0);
+    const allowance = rights.coauthor.remaining;
+    if (allowance != null && count > allowance) {
+      throw new Error('A atribuição de coautoria permite ' + allowance +
+        ' questão(ões) restante(s) nesta avaliação; tentativa de inserir ' + count + '.');
+    }
+    if (!options.recovery && count > 0 && options.subjectId != null) {
+      const forSubject = rights.coauthor.assignments.filter(x =>
+        x.subjectId == null || Number(x.subjectId) === Number(options.subjectId));
+      if (!forSubject.length) {
+        throw new Error('Esta disciplina não consta na atribuição de coautoria da avaliação.');
+      }
+      if (forSubject.every(x => x.limit != null)) {
+        const existingForSubject = detail.questoes.filter(q =>
+          Number(q?.criado_por) === Number(state.currentPortalUserId) &&
+          Number(q?.padrao_disciplina_id) === Number(options.subjectId)).length;
+        const max = forSubject.reduce((sum, x) => sum + x.limit, 0);
+        if (count + existingForSubject > max) {
+          throw new Error('Limite da disciplina excedido: ' + max + ' questão(ões) atribuídas; ' +
+            existingForSubject + ' já vinculada(s) e ' + count + ' para adicionar. ' +
+            'Distribua as questões entre as disciplinas conforme a atribuição oficial.');
+        }
+      }
+    }
   }
   return { audience, rights };
 }
@@ -168,9 +190,14 @@ async function prepareExistingUpdate(uuid) {
   const newIds = expectedQuestionIds();
   const present = new Set(detail.questoes.map(q => String(q.uuid || q.id || q.code || '')));
   if (newIds.length && newIds.every(id => present.has(id))) return { alreadyApplied: true, payload: detail };
-  assertExistingQuestionAccess(detail);
-  const payload = EClassFeatures.mergeAssessment(detail, state.createdQuestions, weights);
-  EClassFeatures.assertUnchangedAudience(detail, payload);
+  await portalCurrentUserId().catch(error =>
+    log('Não foi possível confirmar identidade na recuperação: ' + assessmentErrorBrief(error), 'warn'));
+  assertExistingQuestionAccess(detail, {
+    questionCount: newIds.filter(id => !present.has(id)).length,
+    recovery: true
+  });
+  const c = formConfig();
+  const payload = EClassFeatures.portalUpdatePayload(detail, state.createdQuestions, c, weights);
   return { alreadyApplied: false, payload };
 }
 
@@ -231,11 +258,17 @@ async function inject() {
   const uuid = c.existingMode ? c.targetAssessmentId : null;
   if (uuid) {
     const detail = await fetchExistingAssessment(uuid);
-    const check = assertExistingQuestionAccess(detail); // ANTES de criar a primeira questão
+    await portalCurrentUserId().catch(error =>
+      log('Não foi possível confirmar identidade da conta: ' + assessmentErrorBrief(error), 'warn'));
+    const check = assertExistingQuestionAccess(detail, {
+      questionCount: state.parsed.length,
+      subjectId: c.subjectId
+    }); // antes de criar a primeira questão
     log('Público-alvo conferido: ' + check.audience.classIds.length +
       ' turma(s) existentes; a atualização não modificará seus destinatários.', 'ok');
-    if (check.rights.isOwner && !check.rights.questionPermissionVerified) {
-      log('AVISO: o portal informa que esta sessão é proprietária, mas o contrato de PUT ainda não foi confirmado.', 'warn');
+    if (check.rights.isCoauthor) {
+      log('Coautoria confirmada: ' + check.rights.coauthor.assignments.map(
+        x => x.subjectName + ': ' + (x.limit == null ? 'ilimitado' : x.limit)).join(', '), 'ok');
     }
   }
   const countImages = Object.values(state.figureBindings).reduce((n, group) =>
