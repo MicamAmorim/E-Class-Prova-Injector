@@ -116,7 +116,6 @@ async function clearPendingAssessment() {
     await chrome.storage.local.remove('eciPendingAssessment');
     $('retryAssessment').disabled = true;
     $('clearPending').disabled = true;
-  if ($('inspectPending')) $('inspectPending').disabled = true;
     if ($('inspectPending')) $('inspectPending').disabled = true;
     return;
   }
