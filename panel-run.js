@@ -139,6 +139,26 @@ async function fetchExistingAssessment(uuid) {
   return detail;
 }
 
+function assertExistingQuestionAccess(detail) {
+  if (EClassFeatures.isAssessmentActive(detail)) {
+    throw new Error('A prova está ativa, encerrada ou possui tentativas. Atualização bloqueada.');
+  }
+  const audience = EClassFeatures.assessmentAudience(detail);
+  if (!audience.verified) {
+    throw new Error('Não foi possível verificar as turmas oficiais da aplicação; nenhuma questão nova será criada.');
+  }
+  const rights = EClassFeatures.assessmentPermissions(detail);
+  // is_owner:false NÃO autoriza inferir coautoria editável. Não usar um
+  // erro 500 do servidor como "prova" de que a escrita foi negada: o
+  // contrato do PUT também pode estar incorreto.
+  if (!rights.canEditQuestions && !rights.isOwner) {
+    throw new Error('O E-Class não confirmou permissão de editar as questões desta aplicação ' +
+      '(is_owner=false ou não informado). Nenhuma questão será criada e a pendência existente foi preservada. ' +
+      'Peça à coordenação a confirmação de acesso de edição.');
+  }
+  return { audience, rights };
+}
+
 function expectedQuestionIds() {
   return state.createdQuestions.map(q => EClassFeatures.questionId ? EClassFeatures.questionId(q) : String(q.uuid || q.id || q.code)).filter(Boolean);
 }
@@ -148,7 +168,10 @@ async function prepareExistingUpdate(uuid) {
   const newIds = expectedQuestionIds();
   const present = new Set(detail.questoes.map(q => String(q.uuid || q.id || q.code || '')));
   if (newIds.length && newIds.every(id => present.has(id))) return { alreadyApplied: true, payload: detail };
-  return { alreadyApplied: false, payload: EClassFeatures.mergeAssessment(detail, state.createdQuestions, weights) };
+  assertExistingQuestionAccess(detail);
+  const payload = EClassFeatures.mergeAssessment(detail, state.createdQuestions, weights);
+  EClassFeatures.assertUnchangedAudience(detail, payload);
+  return { alreadyApplied: false, payload };
 }
 
 async function finishAssessmentWrite(c, response, operation) {
@@ -208,7 +231,12 @@ async function inject() {
   const uuid = c.existingMode ? c.targetAssessmentId : null;
   if (uuid) {
     const detail = await fetchExistingAssessment(uuid);
-    if (EClassFeatures.isAssessmentActive(detail)) throw new Error('Não é seguro atualizar prova ativa ou com respostas.');
+    const check = assertExistingQuestionAccess(detail); // ANTES de criar a primeira questão
+    log('Público-alvo conferido: ' + check.audience.classIds.length +
+      ' turma(s) existentes; a atualização não modificará seus destinatários.', 'ok');
+    if (check.rights.isOwner && !check.rights.questionPermissionVerified) {
+      log('AVISO: o portal informa que esta sessão é proprietária, mas o contrato de PUT ainda não foi confirmado.', 'warn');
+    }
   }
   const countImages = Object.values(state.figureBindings).reduce((n, group) =>
     n + Object.values(group).filter(x => x.startsWith('data:')).length, 0);
