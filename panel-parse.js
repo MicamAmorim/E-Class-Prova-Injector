@@ -32,7 +32,7 @@ function renderPreview() {
   $('questionCount').textContent = `${state.parsed.length} questões`;
 }
 
-function analyzeLatex() {
+async function analyzeLatex() {
   if (!state.latex.trim()) throw new Error('Selecione um arquivo .tex primeiro.');
   const parsed = EClassParser.parseLatex(state.latex, $('sectionName').value.trim());
   state.parsed = parsed.questions;
@@ -45,6 +45,7 @@ function analyzeLatex() {
   $('analysisSummary').textContent = `${state.fileName || 'LaTeX'} · ${state.parsed.length} questões · ${formulaCount} fórmulas · gabarito ${state.parsed.length - missing.length}/${state.parsed.length}`;
   if (missing.length) log(`Gabarito ausente nas questões: ${missing.join(', ')}`, 'warn');
   else log(`LaTeX analisado: ${state.parsed.length} questões com gabarito.`, 'ok');
+  await autoBindImageFiles();
   renderPreview();
 }
 
@@ -72,7 +73,8 @@ async function uploadMath(latex) {
 }
 
 async function latexFragmentToHtml(raw, doNetwork, questionNumber = null) {
-  const x = EClassParser.latexTextToHtmlSkeleton(raw, state.macroMap);
+  const prepared = EClassImageImport.tokenizeImages(raw);
+  const x = EClassParser.latexTextToHtmlSkeleton(prepared.text, state.macroMap);
   let html = x.skeleton;
   if (doNetwork) {
     for (let i = 0; i < x.math.length; i++) {
@@ -82,7 +84,7 @@ async function latexFragmentToHtml(raw, doNetwork, questionNumber = null) {
   } else {
     x.math.forEach((f, i) => { html = html.replace(`@@ECIMATH${i}@@`, `<code>${escapeHtml(f)}</code>`); });
   }
-  if (questionNumber != null) html = EClassFeatures.replaceFigureTags(html, state.figureBindings[questionNumber] || {}, questionNumber);
+  if (prepared.refs.length) html = EClassImageImport.replaceImageTokens(html, prepared.refs, state.figureBindings[questionNumber] || {}, questionNumber);
   return { html, warnings: x.warnings, formulas: x.math };
 }
 
@@ -153,7 +155,7 @@ function assessmentPayload(c, created) {
 }
 
 function validate(c) {
-  if (!state.parsed.length) analyzeLatex();
+  if (!state.parsed.length) throw new Error('Analise um arquivo LaTeX antes do envio.');
   if (!c.existingMode && !c.title) throw new Error('Informe o título da prova.');
   if (!c.existingMode && (!c.startDate || !c.resultDate)) throw new Error('Informe as datas.');
   if (!c.existingMode && new Date(c.resultDate) < new Date(c.startDate)) throw new Error('A data de resultado é anterior à data inicial.');
