@@ -6,7 +6,7 @@
   'use strict';
 
   // Suporta imagens nas questões e também em cada alternativa.
-  const IMAGE_RE = /\\includegraphics\s*(?:\[[^\]]*\]\s*)?\{([^{}]+)\}|\bTAGFIGURAAQUI(?:[_-]?\d+)?\b/g;
+  const IMAGE_RE = /\\includegraphics\*?\s*(?:\[[^\]]*\]\s*)?\{([^{}]+)\}|\bTAGFIGURAAQUI(?:[_-]?\d+)?\b/g;
   const EXT_RE = /\.(?:png|jpe?g|webp|gif)$/i;
   const SAFE_DATA_RE = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
 
