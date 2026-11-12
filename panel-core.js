@@ -20,6 +20,7 @@ const API = {
   mathUpload: 'https://ti5v892yac.execute-api.sa-east-1.amazonaws.com/develop/upload',
   terms: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/bimestres?entity_id=${encodeURIComponent(entityId)}`,
   classes: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/school-groups?strict_user=true&entity_id=${encodeURIComponent(entityId)}`,
+  students: entityId => `https://api-usuario.educacaoadventista.org.br/api/v2/entity/${encodeURIComponent(entityId)}/students?strict_user=true`,
   subjects: entity => `https://api-usuario.educacaoadventista.org.br/api/v1/hub-educacional/padrao/1/disciplinas?entity=${encodeURIComponent(JSON.stringify(entity))}&strict_user=true`
 };
 
