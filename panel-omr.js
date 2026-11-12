@@ -10,6 +10,9 @@ async function stableOmrExternalId(c) {
     year: c.academicYear,
     source: state.latex,
     section: c.section,
+    title: currentOmrTitle(c),
+    classIds: [...c.classes].sort((a,b) => a-b),
+    existingTarget: c.existingMode ? c.targetAssessmentId : '',
     questionCount: state.parsed.length
   }));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -81,5 +84,17 @@ async function exportOmr() {
 }
 
 function omrExportBind() {
-  $('exportOmr').addEventListener('click', () => safe(exportOmr));
+  $('exportOmr').addEventListener('click', () => safe(async () => {
+    const button = $('exportOmr');
+    button.disabled = true;
+    $('omrExportStatus').textContent = 'Preparando o gabarito para download...';
+    try {
+      await exportOmr();
+    } catch (error) {
+      $('omrExportStatus').textContent = error.message || String(error);
+      throw error;
+    } finally {
+      button.disabled = false;
+    }
+  }));
 }
