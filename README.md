@@ -1,4 +1,4 @@
-# E-Class Prova Injector — Edge v0.2.5
+# E-Class Prova Injector — Edge v0.2.6
 
 Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questões objetivas e gabarito, converte as fórmulas LaTeX usando o mesmo endpoint observado no E-Class e cria as questões / avaliação pelas APIs usadas pelo próprio portal.
 
@@ -212,3 +212,17 @@ O campo **Título do gabarito** permite personalizar o nome. Com o campo vazio, 
 **Segurança da pendência anterior:** a atualização do código não descarta o estado salvo em `chrome.storage.local`, nem recria as 20 questões. Não desinstale a extensão; recarregue-a na mesma pasta. Não use **Criar no E-Class** novamente e não pressione **Reenviar só a prova** até verificar se a atualização já foi aplicada e obter confirmação da rota de edição. A conta pode estar como coautora sem ser proprietária; `is_owner: false` não comprova, isoladamente, ausência de toda e qualquer permissão de coautoria.
 
 **Limitação:** a inferência de autorização de edição de questões é conservadora e baseada apenas nas informações atualmente observadas. Provas de terceiros podem exigir fluxo de autorização diferente, mesmo para coautores. A operação PUT permanece experimental: isso não substitui um HAR capturado ao editar com sucesso uma prova existente no portal oficial.
+
+### 9. Prova existente: disciplinas por cota e calendário oficial (v0.2.6)
+
+Ao selecionar uma aplicação existente, a extensão consulta o GET oficial, identifica as atribuições de coautoria para a conta autenticada e monta **uma distribuição sequencial** das questões importadas pelas cotas de cada disciplina. A ordem de disciplinas segue `avaliacao.avaliacao_disciplinas` quando disponível; caso contrário, usa a ordem das atribuições retornadas. Por exemplo, com Matemática (15 vagas) e Investigação Matemática (5 vagas), uma importação de 20 objetivas associa Q1–Q15 a Matemática e Q16–Q20 a Investigação Matemática. Cada POST de questão usa **seu próprio `padrao_disciplina_id`**. O painel mostra a distribuição e cada questão recebe uma identificação de disciplina na prévia.
+
+A distribuição é administrativa: **não examina o significado dos enunciados**. Antes de publicar, o professor deve conferir que as últimas cinco questões realmente pertencem à disciplina de Investigação Matemática e, se não pertencerem, reorganizar o LaTeX ou revisar o material. Se os limites por disciplina não forem informados, já estiverem ocupados, houver disciplinas desconhecidas ou o total de questões exceder as vagas restantes, a extensão **bloqueia a criação antes do primeiro POST**.
+
+O **Destino** de uma prova já criada exibe as várias disciplinas e respectivas cotas, **oculta o seletor único** de disciplina e preenche automaticamente os campos de bimestre, data de início e data de resultado a partir da aplicação. Os três campos ficam **bloqueados para edição**. Se um deles não for informado pelo portal, isso é explicitado sem inventar valor. As turmas originais permanecem bloqueadas e não são substituídas pelos checkboxes locais.
+
+**Regressão para provas novas:** ao desmarcar o modo existente, a extensão restaura as turmas, a disciplina única, o bimestre e as datas originais que o usuário havia escolhido. A montagem tradicional de `assessmentPayload` para `POST /aplicacao-avaliacao` e o `questionPayload` de novas provas mantêm o comportamento anterior. Há testes específicos para ambos os payloads, alternância de modo, cotas 15+5, cotas já utilizadas, ordem de disciplinas, calendário e casos inválidos.
+
+**Pendências anteriores:** se existirem questões já criadas em uma tentativa com erro 500, **não remova a extensão, não recrie as questões e não limpe a pendência**. O botão **Verificar vínculo pendente (sem gravar)** consulta o GET para conferir a vinculação. O reenvio por PUT é bloqueado quando o total das questões já criadas ultrapassa a cota da disciplina ou quando não é possível confirmar os IDs de disciplina das questões pendentes. A nova distribuição das questões **não reclassifica retroativamente** itens já criados; estes precisam ser conferidos no portal antes de qualquer operação adicional.
+
+**Validação:** os testes Node existentes continuam no workflow GitHub Actions, agora também com verificação de sintaxe dos scripts. Testes simulados não substituem a prova de integração real com o E-Class; o PUT segue experimental. Faça primeiro um DRY RUN com uma prova de teste e confira a distribuição antes de enviar.
