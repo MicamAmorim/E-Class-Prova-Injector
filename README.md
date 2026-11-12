@@ -1,4 +1,4 @@
-# E-Class Prova Injector — Edge v0.2.1
+# E-Class Prova Injector — Edge v0.2.2
 
 Extensão local para Microsoft Edge que lê uma prova em `.tex`, extrai questões objetivas e gabarito, converte as fórmulas LaTeX usando o mesmo endpoint observado no E-Class e cria as questões / avaliação pelas APIs usadas pelo próprio portal.
 
@@ -169,3 +169,11 @@ MinhaProva/
 **Segurança e limites:** PNG, JPEG, WEBP e GIF; o arquivo precisa ter assinatura válida. Máximo de 1,5 MB por figura, e 3,5 MB de imagens base64 no total de cada execução. Só as imagens efetivamente referenciadas são lidas. Durante a análise, elas permanecem em memória e não são publicadas externamente. Para envio da prova, as imagens são inseridas no HTML como `data:image/...;base64` ou URL HTTPS.
 
 **Integração pendente:** não há confirmação, com sessão autenticada, de que o backend do E-Class aceite imagens `data:` em questões. Realize um envio de teste e confira a renderização antes de publicar provas reais.
+
+### 5. Correção da listagem do E-Class (v0.2.2)
+
+O HAR confirmou **HTTP 200** para `GET /api/v1/avaliacao` e a resposta paginada `data.data`, com campos `current_page`, `last_page` e `total`. A listagem inicialmente analisada possuía **61 avaliações em três páginas**. A consulta agora usa os mesmos parâmetros observados: `editora_id`, `entidade` (JSON), `ano`, `page`, `page_size`, `tipo_gerenciada_except` e `orderBy`.
+
+Cada avaliação possui um array `aplicacoes`. O seletor representa **cada aplicação** por seu próprio UUID, pois a rota de detalhe é `GET /api/v1/aplicacao-avaliacao/{uuid}`. Os detalhes contêm a data real de criação em `created_at` e a avaliação aninhada em `avaliacao`. O filtro retroativo (15 dias por padrão) considera **criação**, não `data_inicio` agendada. A extensão consulta os detalhes em grupos de quatro requisições e exibe alertas se alguma consulta falhar. Aplicações ativas, encerradas ou com tentativas são identificadas como não editáveis.
+
+A criação de questões e a tentativa de atualização via PUT permanecem em fase experimental: o HAR comprova apenas as rotas GET de listagem e detalhe, **não o contrato de escrita**. Novos testes sintéticos verificam paginação, UUID de aplicação, data de criação e bloqueio de avaliações ativas. Nenhum dado do HAR foi incorporado ao repositório.
