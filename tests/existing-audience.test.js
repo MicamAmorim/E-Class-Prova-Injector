@@ -225,3 +225,80 @@ test('carregamento de uma aplicação desativa seleção de turmas e bloqueia ad
   assert.match(ui.existingAudienceStatus.textContent, /não confirma permissão/);
   assert.equal(state.existingTarget.id, 'app-1');
 });
+
+
+test('GET de identificação da conta habilita o botão para coautor, sem destravar turmas', async () => {
+  const checkboxes = [
+    { value: '10', checked: false, disabled: false },
+    { value: '11', checked: false, disabled: false }
+  ];
+  const ui = {
+    useExistingAssessment: { checked: true },
+    existingAssessmentId: { value: 'app-1' },
+    existingAssessments: { value: '' },
+    existingAudienceList: { children: [], replaceChildren(){this.children=[];},appendChild(x){this.children.push(x);} },
+    existingAudienceStatus: { textContent: '' },
+    classesLockStatus: { textContent: '' },
+    inject: { disabled: true }
+  };
+  const document = {
+    querySelectorAll: () => checkboxes,
+    createElement: () => ({ textContent: '' })
+  };
+  const detail = existingDetail();
+  detail.aplicacao.coautores = [
+    { user_id: 123, padrao_disciplina_id: 140, qtd_questoes: 15,
+      data_limite: '2099-11-19 23:59:00',
+      padrao_disciplina: { descricao: 'Matemática' } },
+    { user_id: 123, padrao_disciplina_id: 390, qtd_questoes: 5,
+      data_limite: '2099-11-19 23:59:00',
+      padrao_disciplina: { descricao: 'Investigação Matemática' } }
+  ];
+  const state = { existingLookupSeq: 0, existingTarget: null };
+  const source = fs.readFileSync(path.resolve(__dirname, '../panel-enhancements.js'), 'utf8');
+  const controller = new Function('state','$','document','EClassFeatures',
+    'API','apiFetch','portalHeaders','log',
+    source + '\nreturn {loadExistingAudience};'
+  )(state, id => ui[id], document, F,
+    { assessment: 'https://example.org/api/v1/aplicacao-avaliacao',
+      currentUser: 'https://example.org/api/v1/dados-usuario' },
+    async url => url.endsWith('dados-usuario') ?
+      { usuario_id: 123 } :
+      { data: { ...detail.aplicacao, avaliacao: { ...detail.avaliacao, questoes: detail.questoes } } },
+    () => ({}), () => {});
+  await controller.loadExistingAudience();
+  assert.equal(ui.inject.disabled, false, 'coautor autenticado deve poder clicar');
+  assert.ok(checkboxes.every(x => x.checked && x.disabled));
+  assert.equal(state.currentPortalUserId, 123);
+  assert.match(ui.existingAudienceStatus.textContent, /Coautoria reconhecida/);
+  assert.match(ui.existingAudienceStatus.textContent, /Matemática/);
+  assert.match(ui.existingAudienceStatus.textContent, /Investigação Matemática/);
+});
+
+test('inspeção de pendência é somente leitura e não exige recriar questões', async () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../panel-run.js'), 'utf8');
+  const pending = [
+    { uuid: 'q-1', padrao_disciplina_id: 140 },
+    { uuid: 'q-2', padrao_disciplina_id: 140 }
+  ];
+  let writes = 0;
+  const status = { textContent: '' };
+  const state = {
+    pendingOperation: { type: 'update', id: 'app-1' },
+    createdQuestions: pending
+  };
+  const inspector = new Function('state', 'fetchExistingAssessment', 'EClassFeatures',
+    '$', 'log', source + '\nreturn inspectPendingAssessment;')(
+    state, async id => {
+      assert.equal(id, 'app-1');
+      return { questoes: [{ uuid: 'q-1' }] };
+    }, F, id => {
+      assert.equal(id, 'pendingInspectionStatus');
+      return status;
+    }, () => { writes += 0; });
+  const result = await inspector();
+  assert.equal(result.linked, 1);
+  assert.equal(result.missing, 1);
+  assert.match(status.textContent, /NÃO use/);
+  assert.equal(writes, 0);
+});
