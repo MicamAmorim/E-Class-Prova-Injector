@@ -104,6 +104,103 @@ test('fluxo real de listagem percorre páginas e usa created_at da aplicação',
     'aplicacao-1', 'aplicacao-3'
   ]);
   assert.equal(ui.existingAssessments.options[2].disabled, true, 'prova ativa deve ficar indisponível');
-  assert.match(ui.assessmentListStatus.textContent, /2 prova\(s\) criada\(s\) nos últimos 15 dias/);
+  assert.match(ui.assessmentListStatus.textContent, /2 aplicação\(ões\) listada\(s\)/);
+  assert.match(ui.assessmentListStatus.textContent, /1 fora dos últimos 15 dias/);
   assert.equal(ui.loadAssessments.disabled, false);
+});
+
+
+test('listagem permanece visível quando todos os detalhes falham e a sessão não tem token', async () => {
+  const ui = {
+    assessmentDays: { value: '15' },
+    loadAssessments: { disabled: false },
+    assessmentListStatus: { textContent: '' },
+    existingAssessmentId: { value: '' },
+    existingAssessments: {
+      value: '', options: [],
+      replaceChildren(option) { this.options = [option]; },
+      add(option) { this.options.push(option); }
+    }
+  };
+  let detailCalls = 0, headerCalls = 0;
+  const records = Array.from({ length: 7 }, (_, i) => ({
+    uuid: 'exam-' + i, titulo: 'Prova ' + i,
+    aplicacoes: [{ uuid: 'app-' + i, status: 0, data_inicio: '2026-12-01T00:00:00Z' }]
+  }));
+  const api = vm.runInNewContext(core + '\nAPI', { URLSearchParams });
+  const controller = new Function(
+    'EClassFeatures', 'state', '$', 'tokenForRequest', 'detectSession', 'formConfig',
+    'portalHeaders', 'apiFetch', 'API', 'chrome', 'log', 'Option',
+    panelEnhancements + '\nreturn {loadExistingAssessments};'
+  )(
+    F, { figureBindings: {} }, id => ui[id], () => null, async () => false,
+    () => ({ publisher: 1, entityId: 89, entityName: 'Escola fictícia', entityType: 1, academicYear: 2026 }),
+    (contentType, requireToken) => {
+      assert.equal(requireToken, false, 'consultas GET devem aceitar ausência de Bearer');
+      headerCalls++;
+      return {};
+    },
+    async url => {
+      if (url.includes('/api/v1/avaliacao?')) {
+        return { ret: 1, data: { current_page: 1, last_page: 1, total: 7, data: records } };
+      }
+      detailCalls++;
+      const err = new Error('Proibido'); err.status = 403; throw err;
+    },
+    api, { storage: { local: { get: async () => ({ eciHistory: [] }) } } },
+    () => {}, class Option {
+      constructor(text, value) { this.text = text; this.value = value; this.disabled = false; }
+    }
+  );
+  await controller.loadExistingAssessments();
+  assert.equal(ui.existingAssessments.options.length, 8, 'os sete exames devem continuar visíveis');
+  assert.equal(detailCalls, 4, 'HTTP 403 interrompe novas páginas de detalhes');
+  assert.equal(headerCalls, 5);
+  assert.match(ui.assessmentListStatus.textContent, /detalhe\(s\) não acessível\(is\), mantidos na lista/);
+  assert.match(ui.assessmentListStatus.textContent, /HTTP 403/);
+  assert.equal(ui.loadAssessments.disabled, false);
+});
+
+test('falha da rota principal exibe HTTP em vez de esconder o erro atrás de lista vazia', async () => {
+  const ui = {
+    assessmentDays: { value: '15' }, loadAssessments: { disabled: false },
+    assessmentListStatus: { textContent: '' }, existingAssessmentId: { value: '' },
+    existingAssessments: {
+      value: '', options: [],
+      replaceChildren(option) { this.options = [option]; }, add(option) { this.options.push(option); }
+    }
+  };
+  const api = vm.runInNewContext(core + '\nAPI', { URLSearchParams });
+  const deps = {
+    EClassFeatures: F, state: { figureBindings: {} }, $: id => ui[id],
+    tokenForRequest: () => 'dummy', detectSession: async () => true,
+    formConfig: () => ({ publisher: 1, entityId: 89, entityName: 'Escola fictícia', entityType: 1, academicYear: 2026 }),
+    portalHeaders: () => ({}),
+    apiFetch: async () => {
+      const e = new Error('Internal server error'); e.status = 503; throw e;
+    },
+    API: api, chrome: { storage: { local: { get: async () => ({ eciHistory: [] }) } } },
+    log: () => {}, Option: class Option {
+      constructor(text, value) { this.text = text; this.value = value; this.disabled = false; }
+    }
+  };
+  const controller = new Function(...Object.keys(deps), panelEnhancements + '\nreturn {loadExistingAssessments};')(...Object.values(deps));
+  await controller.loadExistingAssessments();
+  assert.equal(ui.existingAssessments.options.length, 1);
+  assert.match(ui.assessmentListStatus.textContent, /ERRO NA LISTAGEM: HTTP 503/);
+  assert.equal(ui.loadAssessments.disabled, false);
+});
+
+test('cabeçalhos de leitura sem Bearer são permitidos, escrita continua exigindo token', () => {
+  const document = {
+    getElementById: () => ({ value: '' }),
+    querySelectorAll: () => []
+  };
+  const getApi = vm.runInNewContext(core + '\n({portalHeaders})', {
+    document, enhancementsFormConfig: () => ({})
+  });
+  const read = getApi.portalHeaders(false, false);
+  assert.equal(read.authorization, undefined);
+  assert.equal(read['content-language'], 'pt-BR');
+  assert.throws(() => getApi.portalHeaders(true), /Sessão não detectada/);
 });
