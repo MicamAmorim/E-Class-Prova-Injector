@@ -273,6 +273,35 @@
       mapping: Object.fromEntries(entries.map(q => [String(q.number), q.subjectId])) };
   }
 
+  function existingSubjectPlan(detail, userId, questions, now = new Date()) {
+    const grant = coauthorGrant(detail, userId, now);
+    if (grant.valid) return coauthorSubjectPlan(detail, userId, questions, now);
+    const app = detail?.aplicacao || detail || {};
+    if (app.is_owner !== true) return coauthorSubjectPlan(detail, userId, questions, now);
+    const exam = detail?.avaliacao || app.avaliacao || {};
+    const source = exam.avaliacao_disciplinas || [];
+    const raw = Array.isArray(source) && source.length ?
+      source.map(x => x && typeof x === 'object' ? x.padrao_disciplina_id : x) :
+      [exam.padrao_disciplina_id].filter(x => x != null);
+    const ids = [...new Set(raw.map(Number).filter(x => Number.isSafeInteger(x) && x > 0))];
+    if (ids.length !== 1) {
+      return { valid: false, entries: [], assignments: [],
+        reason: ids.length > 1 ?
+          'A prova do proprietário tem várias disciplinas, mas nenhuma cota por questão; não é seguro escolher automaticamente.' :
+          'A disciplina original da prova não foi identificada.' };
+    }
+    const id = ids[0];
+    const name = String(exam.avaliacao_disciplinas?.find(x =>
+      Number(x?.padrao_disciplina_id) === id)?.padrao_disciplina?.descricao || id);
+    const entries = (questions || []).map(q => ({ number: q.number, subjectId: id, subjectName: name }));
+    return {
+      valid: true,
+      assignments: [{ subjectId: id, subjectName: name, limit: null, remaining: null, alreadyLinked: null }],
+      entries,
+      mapping: Object.fromEntries(entries.map(q => [String(q.number), id]))
+    };
+  }
+
   function assessmentPermissions(detail, userId, now = new Date()) {
     const app = detail?.aplicacao || detail || {};
     const exam = detail?.avaliacao || app.avaliacao || {};
@@ -465,6 +494,6 @@
     studentsFromClasses, makeIndividualAudience, questionId,
     assessmentListPage, applicationCandidates,
     assessmentAudience, assessmentPermissions, assessmentCalendar,
-    coauthorGrant, coauthorSubjectPlan, portalUpdatePayload, assertUnchangedAudience
+    coauthorGrant, coauthorSubjectPlan, existingSubjectPlan, portalUpdatePayload, assertUnchangedAudience
   };
 });
