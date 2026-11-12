@@ -228,7 +228,7 @@ function renderExistingDestination() {
     $('term').selectedOptions?.[0]?.textContent ||
     (schedule.termNumber != null ? 'Bimestre nº ' + schedule.termNumber : 'não informado');
   $('existingCalendarStatus').textContent =
-    'Bimestre: ' + (schedule.termId != null ? termLabel : 'não informado') +
+    'Bimestre: ' + (schedule.termId != null || schedule.termNumber != null ? termLabel : 'não informado') +
     ' · Início: ' + (schedule.startDate || 'não informado') +
     ' · Resultado: ' + (schedule.resultDate || 'não informado') +
     '. Campos protegidos; o Injector preserva os valores da aplicação.';
@@ -249,7 +249,8 @@ function renderExistingDestination() {
     list.appendChild(item);
   }
   $('existingSubjectStatus').textContent = plan.valid ?
-    'Distribuição automática na ordem do arquivo LaTeX. Confira o conteúdo de cada disciplina antes de enviar.' :
+    'Distribuição pela ordem do LaTeX, sem alterar os enunciados. Confira se Q1–Q' +
+    state.parsed.length + ' estão distribuídas entre disciplinas semanticamente corretas antes de enviar.' :
     'Distribuição indisponível: ' + plan.reason +
     ' O envio de questões novas fica bloqueado.';
 }
@@ -266,9 +267,10 @@ function renderExistingAudience() {
   // Jamais iniciar uma criação de questões quando a autorização para editar
   // a prova existente não puder ser confirmada. O botão de reenviar
   // continua independente, preservando operações pendentes.
+  const pending = Boolean(state.createdQuestions?.length && state.pendingOperation);
   const canAdd = isConfirmed && !selected.permissions.active &&
     selected.permissions.canEditQuestions &&
-    (!state.parsed.length || state.existingSubjectPlan?.valid);
+    (!state.parsed.length || state.existingSubjectPlan?.valid) && !pending;
   $('inject').disabled = existing && !canAdd;
 
   for (const box of boxes) {
@@ -325,7 +327,9 @@ function renderExistingAudience() {
     (!perm.canEditQuestions ?
       ' Adição de novas questões bloqueada: autorização não confirmada.' :
       ' A edição das questões é permitida pela atribuição; as turmas permanecem protegidas.') +
-    (selected.audience.hasIndividuals ? ' Público-alvo também inclui destinatários individuais.' : '');
+    (selected.audience.hasIndividuals ? ' Público-alvo também inclui destinatários individuais.' : '') +
+    (pending ? ' Existem ' + state.createdQuestions.length +
+      ' questões de uma tentativa anterior em pendência. Use “Verificar vínculo pendente (sem gravar)” antes de qualquer nova criação.' : '');
 }
 
 async function loadExistingAudience() {
