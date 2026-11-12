@@ -92,6 +92,7 @@ test('fluxo real de listagem percorre páginas e usa created_at da aplicação',
         this.value = value;
         this.disabled = false;
         this.selected = false;
+        this.dataset = {};
       }
     }
   };
@@ -149,7 +150,7 @@ test('listagem permanece visível quando todos os detalhes falham e a sessão n�
     },
     api, { storage: { local: { get: async () => ({ eciHistory: [] }) } } },
     () => {}, class Option {
-      constructor(text, value) { this.text = text; this.value = value; this.disabled = false; }
+      constructor(text, value) { this.text = text; this.value = value; this.disabled = false; this.dataset = {}; }
     }
   );
   await controller.loadExistingAssessments();
@@ -181,7 +182,7 @@ test('falha da rota principal exibe HTTP em vez de esconder o erro atrás de lis
     },
     API: api, chrome: { storage: { local: { get: async () => ({ eciHistory: [] }) } } },
     log: () => {}, Option: class Option {
-      constructor(text, value) { this.text = text; this.value = value; this.disabled = false; }
+      constructor(text, value) { this.text = text; this.value = value; this.disabled = false; this.dataset = {}; }
     }
   };
   const controller = new Function(...Object.keys(deps), panelEnhancements + '\nreturn {loadExistingAssessments};')(...Object.values(deps));
