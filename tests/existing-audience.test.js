@@ -84,9 +84,9 @@ test('mesclagem nunca troca, filtra ou reconstitui turmas do publico_alvo', () =
 
 test('preflight bloqueia aplicação não pertencente à sessão antes de criar questões', () => {
   const src = fs.readFileSync(path.resolve(__dirname, '../panel-run.js'), 'utf8');
-  const access = new Function('EClassFeatures', src + '\nreturn assertExistingQuestionAccess;')(F);
+  const access = new Function('EClassFeatures', 'state', src + '\nreturn assertExistingQuestionAccess;')(F, { currentPortalUserId: 123 });
   assert.throws(() => access(existingDetail({ owner: false })),
-    /não confirmou permissão de editar as questões/);
+    /não foi identificada como proprietária nem como coautora/);
   assert.throws(() => access(existingDetail({ owner: true, status: 1 })),
     /ativa, encerrada/);
   const positive = access(existingDetail({ owner: true }));
@@ -97,6 +97,67 @@ test('preflight bloqueia aplicação não pertencente à sessão antes de criar 
     aplicacao: { uuid: 'app-1', status: 0, is_owner: true },
     avaliacao: {}, questoes: []
   }), /turmas oficiais/);
+});
+
+
+test('coautor autenticado pode contribuir mesmo quando is_owner é false', () => {
+  const d = existingDetail({ owner: false });
+  d.aplicacao.coautores = [
+    { user_id: 123, padrao_disciplina_id: 140, qtd_questoes: 15,
+      data_limite: '2099-11-19 23:59:00',
+      padrao_disciplina: { descricao: 'Matemática' } },
+    { user_id: 123, padrao_disciplina_id: 390, qtd_questoes: 5,
+      data_limite: '2099-11-19 23:59:00',
+      padrao_disciplina: { descricao: 'Investigação Matemática' } }
+  ];
+  const grant = F.coauthorGrant(d, 123);
+  assert.equal(grant.matched, true);
+  assert.equal(grant.valid, true);
+  assert.equal(grant.totalLimit, 20);
+  assert.equal(grant.remaining, 20);
+  assert.equal(grant.assignments.length, 2);
+  assert.equal(F.assessmentPermissions(d, 123).canEditQuestions, true);
+  assert.equal(F.assessmentPermissions(d, 123).isCoauthor, true);
+  assert.equal(F.assessmentPermissions(d, 123).canChangeClasses, false);
+  assert.equal(F.assessmentPermissions(d, 333).canEditQuestions, false);
+  const access = new Function('EClassFeatures', 'state',
+    fs.readFileSync(path.resolve(__dirname, '../panel-run.js'), 'utf8') +
+    '\nreturn assertExistingQuestionAccess;')(F, { currentPortalUserId: 123 });
+  assert.deepEqual(access(d, { questionCount: 15, subjectId: 140 }).audience.classIds, [10, 11]);
+  assert.throws(() => access(d, { questionCount: 20, subjectId: 140 }), /Limite da disciplina excedido/);
+  assert.doesNotThrow(() => access(d, { questionCount: 20, recovery: true }));
+});
+
+test('coautoria expirada não habilita edição', () => {
+  const d = existingDetail();
+  d.aplicacao.coautores = [
+    { user_id: 123, qtd_questoes: 20, data_limite: '2020-01-01 00:00:00' }
+  ];
+  assert.equal(F.assessmentPermissions(d, 123).isCoauthor, false);
+  assert.equal(F.coauthorGrant(d, 123).expired, true);
+});
+
+test('PUT usa contrato de seis campos do editor oficial e mantém mesmas turmas', () => {
+  const d = existingDetail({ owner: true });
+  d.avaliacao.avaliacao_disciplinas = [
+    { padrao_disciplina_id: 140 }, { padrao_disciplina_id: 390 }
+  ];
+  const questions = [{ uuid: 'nova-a', padrao_disciplina_id: 140 },
+    { uuid: 'nova-b', padrao_disciplina_id: 390 }];
+  const config = { entityId: 89, entityName: 'Escola fictícia', entityType: 1 };
+  const payload = F.portalUpdatePayload(d, questions, config, n => Array(n).fill(100/n));
+  assert.deepEqual(Object.keys(payload), [
+    'aplicacao', 'avaliacao', 'questoes', 'entidade', 'questoesIncluidas', 'questoesRemovidas'
+  ]);
+  assert.deepEqual(payload.aplicacao.publico_alvo, [
+    { turma_id: 10, user_id: null, padrao_serie_id: null, entidade_id: 89 },
+    { turma_id: 11, user_id: null, padrao_serie_id: null, entidade_id: 89 }
+  ]);
+  assert.deepEqual(payload.avaliacao.avaliacao_disciplinas, [140, 390]);
+  assert.equal('questoes' in payload.avaliacao, false);
+  assert.deepEqual(payload.questoesIncluidas.map(q => q.uuid), ['nova-a','nova-b']);
+  assert.deepEqual(payload.questoesRemovidas, []);
+  assert.equal(d.aplicacao.publico_alvo.length, 2);
 });
 
 test('painel possui bloco de turmas oficiais e seleção bloqueada no modo existente', () => {
