@@ -186,6 +186,93 @@
     };
   }
 
+  function assessmentCalendar(detail) {
+    const app = detail?.aplicacao || detail || {};
+    const asDate = value => {
+      if (!value) return '';
+      const candidate = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+      return candidate && !Number.isNaN(new Date(candidate[1] + 'T12:00:00').getTime()) ?
+        candidate[1] : '';
+    };
+    const termId = app.bimestre_id ?? app.bimestre?.id ?? detail?.avaliacao?.bimestre_id ?? null;
+    return {
+      startDate: asDate(app.data_inicio),
+      resultDate: asDate(app.data_resultado),
+      termId: termId == null || termId === '' ? null : Number(termId),
+      termNumber: app.bimestre_n ?? app.bimestre?.numero ?? null,
+      termName: String(app.bimestre?.descricao || app.bimestre?.nome || ''),
+      fromPortal: true
+    };
+  }
+
+  function coauthorSubjectPlan(detail, userId, questions, now = new Date()) {
+    const grant = coauthorGrant(detail, userId, now);
+    if (!grant.valid) {
+      return { valid: false, reason: grant.expired ?
+        'A atribuição de coautoria está vencida.' :
+        'Não há atribuição de coautoria ativa para esta conta.', entries: [], assignments: [] };
+    }
+    const existing = Array.isArray(detail?.questoes) ? detail.questoes :
+      Array.isArray(detail?.avaliacao?.questoes) ? detail.avaliacao.questoes : [];
+    const uid = Number(userId);
+    const grouped = new Map();
+    for (const assignment of grant.assignments) {
+      const subjectId = Number(assignment.subjectId);
+      if (!Number.isSafeInteger(subjectId) || subjectId <= 0) {
+        return { valid: false, reason: 'Coautoria sem identificador de disciplina. Distribuição automática indisponível.',
+          entries: [], assignments: [] };
+      }
+      if (!grouped.has(subjectId)) {
+        grouped.set(subjectId, {
+          subjectId,
+          subjectName: assignment.subjectName,
+          limit: 0,
+          unlimited: false,
+          alreadyLinked: 0
+        });
+      }
+      const group = grouped.get(subjectId);
+      if (assignment.limit == null) group.unlimited = true;
+      else group.limit += Math.max(0, assignment.limit);
+    }
+    const assignments = [...grouped.values()];
+    for (const group of assignments) {
+      group.alreadyLinked = existing.filter(q => {
+        const author = q.criado_por ?? q.dadosGerais?.criado_por ?? q.user_id;
+        const discipline = q.padrao_disciplina_id ?? q.dadosGerais?.padrao_disciplina_id;
+        return Number(author) === uid && Number(discipline) === group.subjectId;
+      }).length;
+      group.remaining = group.unlimited ? null : Math.max(0, group.limit - group.alreadyLinked);
+      if (group.unlimited) group.limit = null;
+      delete group.unlimited;
+    }
+    const source = Array.isArray(questions) ? questions : [];
+    const entries = [];
+    for (const group of assignments) {
+      const available = group.remaining == null ? source.length - entries.length :
+        Math.min(source.length - entries.length, group.remaining);
+      for (let i = 0; i < available; i++) {
+        const question = source[entries.length];
+        entries.push({
+          number: question.number,
+          subjectId: group.subjectId,
+          subjectName: group.subjectName
+        });
+      }
+      if (entries.length === source.length) break;
+    }
+    if (entries.length < source.length) {
+      return {
+        valid: false, assignments, entries,
+        reason: 'A prova contém ' + source.length + ' questões, mas a soma das cotas disponíveis ' +
+          'por disciplina é insuficiente. Restam ' + (source.length - entries.length) +
+          ' questão(ões) sem disciplina autorizada.'
+      };
+    }
+    return { valid: true, assignments, entries,
+      mapping: Object.fromEntries(entries.map(q => [String(q.number), q.subjectId])) };
+  }
+
   function assessmentPermissions(detail, userId, now = new Date()) {
     const app = detail?.aplicacao || detail || {};
     const exam = detail?.avaliacao || app.avaliacao || {};
@@ -377,7 +464,7 @@
     withinDays, detailPayload, isAssessmentActive, mergeAssessment,
     studentsFromClasses, makeIndividualAudience, questionId,
     assessmentListPage, applicationCandidates,
-    assessmentAudience, assessmentPermissions, coauthorGrant,
-    portalUpdatePayload, assertUnchangedAudience
+    assessmentAudience, assessmentPermissions, assessmentCalendar,
+    coauthorGrant, coauthorSubjectPlan, portalUpdatePayload, assertUnchangedAudience
   };
 });
