@@ -361,6 +361,7 @@ async function loadExistingAudience() {
     const calendar = EClassFeatures.assessmentCalendar(detail);
     state.existingTarget = { id, audience, permissions, calendar, detail };
     renderExistingAudience();
+    if (state.parsed.length) renderPreview();
     if (!audience.verified) {
       log('O E-Class não retornou as turmas oficiais da aplicação ' + id + '.', 'warn');
     } else {
