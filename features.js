@@ -167,8 +167,10 @@
     // O portal soma a quantidade por disciplina para o limite do coautor.
     // As disciplinas continuam explícitas para não confundir 15+5 com
     // autorização para inserir 20 questões de uma única disciplina.
-    const total = eligible.some(x => x.qtd_questoes == null) ? null :
-      eligible.reduce((sum, x) => sum + Math.max(0, Number(x.qtd_questoes) || 0), 0);
+    const limitOf = x => x.qtd_questoes ?? x.quantidade_questoes ??
+      x.limite_questoes ?? null;
+    const total = eligible.some(x => limitOf(x) == null) ? null :
+      eligible.reduce((sum, x) => sum + Math.max(0, Number(limitOf(x)) || 0), 0);
     const existing = (exam.questoes || []).filter(q => Number(q?.criado_por) === uid).length;
     return {
       matched: matched.length > 0,
@@ -177,7 +179,8 @@
       assignments: eligible.map(x => ({
         subjectId: x.padrao_disciplina_id == null ? null : Number(x.padrao_disciplina_id),
         subjectName: String(x.padrao_disciplina?.descricao || x.padrao_disciplina_id || 'Geral'),
-        limit: x.qtd_questoes == null ? null : Number(x.qtd_questoes),
+        limit: limitOf(x) == null ? null : Number(limitOf(x)),
+        limitKnown: limitOf(x) != null,
         deadline: String(x.data_limite || '')
       })),
       totalLimit: total,
@@ -211,6 +214,11 @@
       return { valid: false, reason: grant.expired ?
         'A atribuição de coautoria está vencida.' :
         'Não há atribuição de coautoria ativa para esta conta.', entries: [], assignments: [] };
+    }
+    if (grant.assignments.some(x => !x.limitKnown)) {
+      return { valid: false, entries: [], assignments: grant.assignments,
+        reason: 'O E-Class não informou a cota de uma ou mais disciplinas. ' +
+          'A distribuição automática foi bloqueada para evitar exceder limites desconhecidos.' };
     }
     const existing = Array.isArray(detail?.questoes) ? detail.questoes :
       Array.isArray(detail?.avaliacao?.questoes) ? detail.avaliacao.questoes : [];
