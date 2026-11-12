@@ -153,28 +153,127 @@
     };
   }
 
-  function assessmentPermissions(detail) {
+  function coauthorGrant(detail, userId, now = new Date()) {
+    const app = detail?.aplicacao || detail || {};
+    const exam = detail?.avaliacao || app.avaliacao || {};
+    const uid = Number(userId);
+    const matched = Number.isSafeInteger(uid) && uid > 0 ?
+      (app.coautores || []).filter(x => Number(x?.user_id) === uid) : [];
+    const eligible = matched.filter(x => {
+      if (!x.data_limite) return true;
+      const end = new Date(String(x.data_limite).replace(' ', 'T'));
+      return !Number.isNaN(end.getTime()) && end >= now;
+    });
+    // O portal soma a quantidade por disciplina para o limite do coautor.
+    // As disciplinas continuam explícitas para não confundir 15+5 com
+    // autorização para inserir 20 questões de uma única disciplina.
+    const total = eligible.some(x => x.qtd_questoes == null) ? null :
+      eligible.reduce((sum, x) => sum + Math.max(0, Number(x.qtd_questoes) || 0), 0);
+    const existing = (exam.questoes || []).filter(q => Number(q?.criado_por) === uid).length;
+    return {
+      matched: matched.length > 0,
+      valid: eligible.length > 0,
+      expired: matched.length > 0 && eligible.length === 0,
+      assignments: eligible.map(x => ({
+        subjectId: x.padrao_disciplina_id == null ? null : Number(x.padrao_disciplina_id),
+        subjectName: String(x.padrao_disciplina?.descricao || x.padrao_disciplina_id || 'Geral'),
+        limit: x.qtd_questoes == null ? null : Number(x.qtd_questoes),
+        deadline: String(x.data_limite || '')
+      })),
+      totalLimit: total,
+      alreadyIncluded: existing,
+      remaining: total == null ? null : Math.max(0, total - existing)
+    };
+  }
+
+  function assessmentPermissions(detail, userId, now = new Date()) {
     const app = detail?.aplicacao || detail || {};
     const exam = detail?.avaliacao || app.avaliacao || {};
     const active = isAssessmentActive(detail?.aplicacao ? detail : {
       aplicacao: app, avaliacao: exam
     });
-    // Em particular, is_owner não indica por si só permissão sobre o
-    // publico_alvo. Sinais ausentes são desconhecidos, nunca "autorizado".
     const explicitAudience = app.can_edit_publico_alvo === true ||
       app.pode_editar_publico_alvo === true ||
       app.permissions?.can_edit_publico_alvo === true;
     const explicitQuestions = app.can_edit_questoes === true ||
       app.pode_editar_questoes === true ||
       app.permissions?.can_edit_questoes === true;
+    const coauthor = coauthorGrant(detail, userId, now);
     return {
       active,
       isOwner: app.is_owner === true,
       isOwnerKnown: typeof app.is_owner === 'boolean',
+      isCoauthor: !active && coauthor.valid,
+      coauthor,
       canChangeClasses: !active && explicitAudience,
-      canEditQuestions: !active && explicitQuestions,
+      canEditQuestions: !active &&
+        (app.is_owner === true || explicitQuestions || coauthor.valid),
       audiencePermissionVerified: explicitAudience,
-      questionPermissionVerified: explicitQuestions
+      questionPermissionVerified: explicitQuestions || coauthor.valid
+    };
+  }
+
+  // Esta é a forma observada no JavaScript do editor oficial salvo no HAR:
+  // {aplicacao, avaliacao, questoes, entidade, questoesIncluidas, questoesRemovidas}.
+  // O público-alvo é projetado para os mesmos campos que o editor envia.
+  function portalUpdatePayload(detail, incoming, config, weightFn) {
+    if (!detail?.aplicacao || !detail?.avaliacao ||
+        !Array.isArray(detail.questoes) || !Array.isArray(detail.aplicacao.publico_alvo)) {
+      throw new Error('Não foi possível reconstruir os dados oficiais da aplicação.');
+    }
+    const merged = mergeAssessment(detail, incoming, weightFn);
+    assertUnchangedAudience(detail, merged);
+    const original = detail.aplicacao.publico_alvo;
+    const publico_alvo = original.map(rec => {
+      const entityId = rec.entidade_id ?? rec.turma?.entidade?.id ??
+        rec.user?.entidade?.id ?? config.entityId;
+      if ((rec.turma_id == null && rec.user_id == null && rec.padrao_serie_id == null) ||
+          !Number.isSafeInteger(Number(entityId)) || Number(entityId) <= 0) {
+        throw new Error('Destinatário inválido; não é seguro alterar esta aplicação.');
+      }
+      return {
+        turma_id: rec.turma_id ?? null,
+        user_id: rec.user_id ?? null,
+        padrao_serie_id: rec.padrao_serie_id ?? null,
+        entidade_id: Number(entityId)
+      };
+    });
+    if (publico_alvo.length !== original.length ||
+        publico_alvo.some((x, i) =>
+          String(x.turma_id) !== String(original[i].turma_id ?? null) ||
+          String(x.user_id) !== String(original[i].user_id ?? null) ||
+          String(x.padrao_serie_id) !== String(original[i].padrao_serie_id ?? null))) {
+      throw new Error('A atualização mudou a identidade dos destinatários.');
+    }
+    const app = { ...merged.aplicacao, publico_alvo };
+    if (Array.isArray(app.disciplina_opcionais)) {
+      app.disciplina_opcionais = app.disciplina_opcionais.map(x =>
+        x && typeof x === 'object' ? x.padrao_disciplina_id : x).filter(x => x != null);
+    }
+    delete app.entidades;
+    delete app.avaliacao;
+    const avaliacao = { ...merged.avaliacao };
+    delete avaliacao.questoes;
+    if (Array.isArray(avaliacao.avaliacao_disciplinas)) {
+      avaliacao.avaliacao_disciplinas = avaliacao.avaliacao_disciplinas
+        .map(x => x && typeof x === 'object' ? x.padrao_disciplina_id : x)
+        .filter(x => x != null);
+    }
+    const includedIds = new Set(incoming.map(questionId));
+    const questoesIncluidas = merged.questoes.filter(q => includedIds.has(questionId(q)) &&
+      !detail.questoes.some(old => questionId(old) === questionId(q)));
+    return {
+      aplicacao: app,
+      avaliacao,
+      questoes: merged.questoes,
+      entidade: {
+        id: Number(config.entityId),
+        nome: String(config.entityName),
+        tipo: Number(config.entityType),
+        externo: false
+      },
+      questoesIncluidas,
+      questoesRemovidas: []
     };
   }
 
@@ -278,6 +377,7 @@
     withinDays, detailPayload, isAssessmentActive, mergeAssessment,
     studentsFromClasses, makeIndividualAudience, questionId,
     assessmentListPage, applicationCandidates,
-    assessmentAudience, assessmentPermissions, assertUnchangedAudience
+    assessmentAudience, assessmentPermissions, coauthorGrant,
+    portalUpdatePayload, assertUnchangedAudience
   };
 });
