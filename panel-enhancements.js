@@ -228,7 +228,9 @@ function renderExistingAudience() {
   $('existingAudienceStatus').textContent =
     text + ' ' + owner + ' ' +
     (perm.active ? 'Aplicação ativa/encerrada ou com tentativas.' :
-      'O HAR não comprova permissão para editar turmas; a seleção permanece bloqueada.') +
+      perm.canChangeClasses ?
+        'O portal informou permissão sobre público-alvo, mas alterações de turma permanecem desativadas até validar o contrato de escrita.' :
+        'O retorno não confirma permissão para alterar turmas; a seleção permanece bloqueada.') +
     ((!perm.canEditQuestions && !perm.isOwner) ?
       ' Adição de novas questões bloqueada: permissão não confirmada.' :
       ' A adição de questões continua experimental; nenhum destinatário será alterado.') +
