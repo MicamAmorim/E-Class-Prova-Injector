@@ -32,7 +32,7 @@
       <label class="toggle"><input id="useExistingAssessment" type="checkbox"> Adicionar questões a uma prova já criada (sem criar nova avaliação)</label>
       <div id="existingArea" class="hidden subpanel">
         <div class="row wrap">
-          <label>Período de busca (últimos dias)
+          <label>Aplicações criadas nos últimos (dias)
             <input id="assessmentDays" type="number" min="1" max="365" value="15">
           </label>
           <button id="loadAssessments" class="secondary">Listar provas</button>
@@ -40,10 +40,10 @@
         <label>Provas encontradas
           <select id="existingAssessments"><option value="">Selecione uma prova</option></select>
         </label>
-        <label>UUID/ID da prova (também pode ser informado manualmente)
-          <input id="existingAssessmentId" placeholder="UUID da avaliação existente">
+        <label>UUID da aplicação (pode ser informado manualmente)
+          <input id="existingAssessmentId" placeholder="UUID da aplicação (não da avaliação)">
         </label>
-        <p id="assessmentListStatus" class="hint">Últimos 15 dias por padrão. A atualização será bloqueada se o portal não fornecer detalhes completos da prova.</p>
+        <p id="assessmentListStatus" class="hint">Consulta paginada do portal (últimos 15 dias de criação por padrão). A seleção utiliza o UUID da aplicação; provas ativas ou com respostas não podem ser alteradas.</p>
       </div>
       <label class="filebox">
         <span>Selecionar pasta da prova (.tex + imagens) — recomendado</span>
