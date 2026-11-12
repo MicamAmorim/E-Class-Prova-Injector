@@ -14,6 +14,39 @@
     return match ? Number(match[1]) + 'M' + match[2].toUpperCase() : name;
   }
 
+  // A rota de matrículas usada na branch word pode retornar alunos vinculados
+  // a uma ou várias turmas. Normalizamos somente os campos necessários ao OMR.
+  function normalizeRoster(payload) {
+    const rows = Array.isArray(payload) ? payload :
+      (Array.isArray(payload?.data) ? payload.data :
+       Array.isArray(payload?.data?.data) ? payload.data.data :
+       Array.isArray(payload?.students) ? payload.students :
+       Array.isArray(payload?.data?.students) ? payload.data.students : []);
+    const result = new Map();
+    for (const student of rows) {
+      if (!student || typeof student !== 'object') continue;
+      const id = student.student_id ?? student.aluno_id ??
+        student.id ?? student.student?.id ?? student.aluno?.id;
+      if (id == null || id === '') continue;
+      const name = student.name || student.nome ||
+        student.student?.name || student.student?.nome ||
+        student.aluno?.nome || String(id);
+      const groups = new Set();
+      for (const raw of [student.group_id, student.classId, student.turma_id]) {
+        if (raw != null && Number.isFinite(Number(raw)) && Number(raw)>0) groups.add(Number(raw));
+      }
+      const memberships = student.student_groups || student.turmas || [];
+      for (const group of Array.isArray(memberships) ? memberships : []) {
+        const gid = group?.turma_id ?? group?.group_id ?? group?.classId;
+        if (gid != null && Number.isFinite(Number(gid)) && Number(gid)>0) groups.add(Number(gid));
+      }
+      for (const classId of groups) {
+        result.set(classId + ':' + String(id), { classId, id: String(id), name: String(name) });
+      }
+    }
+    return [...result.values()];
+  }
+
   function fileNameForExam(title) {
     const base = String(title || 'prova')
       .replace(/[^\p{L}\p{N}._-]+/gu, '_')
@@ -110,5 +143,5 @@
     };
   }
 
-  return { schema, friendlyClassName, fileNameForExam, buildPackage };
+  return { schema, friendlyClassName, fileNameForExam, normalizeRoster, buildPackage };
 });
