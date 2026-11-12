@@ -12,7 +12,7 @@
       <h1>E-Class Prova Injector</h1>
       <p>LaTeX → questões → prova no E-Class</p>
     </div>
-    <span id="version">v0.2.0</span>
+    <span id="version">v0.2.1</span>
   </header>
 
   <main>
@@ -46,9 +46,19 @@
         <p id="assessmentListStatus" class="hint">Últimos 15 dias por padrão. A atualização será bloqueada se o portal não fornecer detalhes completos da prova.</p>
       </div>
       <label class="filebox">
-        <span>Selecionar arquivo .tex</span>
+        <span>Selecionar pasta da prova (.tex + imagens) — recomendado</span>
+        <input id="folderFile" type="file" webkitdirectory directory multiple>
+      </label>
+      <div id="folderTexArea" class="hidden">
+        <label>Arquivo .tex encontrado na pasta
+          <select id="folderTexChoice"></select>
+        </label>
+      </div>
+      <label class="filebox">
+        <span>Ou selecionar apenas um arquivo .tex (sem acesso automático à pasta)</span>
         <input id="texFile" type="file" accept=".tex,text/x-tex,text/plain">
       </label>
+      <p id="figureImportStatus" class="hint">Selecione a pasta da prova para carregar imagens automaticamente, inclusive das alternativas.</p>
       <div class="grid2">
         <label>Seção da prova
           <input id="sectionName" value="MATEMÁTICA">
@@ -156,9 +166,11 @@
 
   <script src="parser.js"></script>
   <script src="features.js"></script>
+  <script src="image-import.js"></script>
   <script src="panel-core.js"></script>
   <script src="panel-parse.js"></script>
   <script src="panel-enhancements.js"></script>
+  <script src="panel-image-import.js"></script>
   <script src="panel-run.js"></script>
   <script src="panel-init.js"></script>
 </body>
