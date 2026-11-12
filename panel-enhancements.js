@@ -260,7 +260,7 @@ async function loadExistingAssessments() {
   const records = new Map();
   let pagesLoaded = 0, evaluationsFound = 0, detailErrors = 0;
   let filteredOld = 0, unknownDates = 0, listError = null, stoppedForRateLimit = false;
-  let noApplicationCount = 0, truncated = false;
+  let noApplicationCount = 0, truncated = false, stopDetailsStatus = 0;
   try {
     if (!tokenForRequest()) {
       await detectSession();
@@ -322,7 +322,7 @@ async function loadExistingAssessments() {
     const ids = [...records.keys()];
     const batchSize = 4;
     for (let i = 0; i < ids.length; i += batchSize) {
-      if (stoppedForRateLimit) break;
+      if (stoppedForRateLimit || stopDetailsStatus) break;
       const batch = ids.slice(i, i + batchSize);
       await Promise.all(batch.map(async id => {
         const rec = records.get(id);
@@ -349,6 +349,7 @@ async function loadExistingAssessments() {
         } catch (error) {
           detailErrors++;
           if (error?.status === 429) stoppedForRateLimit = true;
+          if (error?.status === 401 || error?.status === 403) stopDetailsStatus = error.status;
           if (detailErrors <= 4) {
             log('Detalhes de aplicação indisponíveis (' + assessmentErrorBrief(error) +
               '). A prova continua visível, mas não foi verificada.', 'warn');
@@ -382,6 +383,7 @@ async function loadExistingAssessments() {
     if (noApplicationCount) parts.push(noApplicationCount + ' avaliação(ões) sem aplicação');
     if (truncated) parts.push('limite de 30 páginas atingido');
     if (stoppedForRateLimit) parts.push('limite HTTP 429, interrompi a verificação');
+    if (stopDetailsStatus) parts.push('HTTP ' + stopDetailsStatus + ' nos detalhes; interrompi novas consultas, sem ocultar provas');
     if (listError) parts.push('ERRO NA LISTAGEM: ' + listError);
     if (!visibleCount) parts.push(listError ?
       'confira sessão, entidade, ano e o log' :
