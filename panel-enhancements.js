@@ -238,6 +238,7 @@ function renderExistingAssessmentChoices(records, selectedId) {
       (rec.active ? ' · ATIVA/ENCERRADA (edição bloqueada)' : '') +
       (rec.historyOnly ? ' · histórico local' : '');
     const option = new Option(title, rec.id);
+    option.dataset.title = rec.title;
     option.disabled = Boolean(rec.active);
     $('existingAssessments').add(option);
     if (rec.id === selectedId && !rec.active) option.selected = true;
