@@ -62,7 +62,10 @@ async function saveRunHistory(status, c, error = null, assessmentResponse = null
         uuid: q.uuid, code: q.code, peso: q.peso
       }))
     } : null,
-    assessmentResponse,
+    assessmentResponse: (() => {
+      const record = EClassFeatures.assessmentRecord(assessmentResponse);
+      return record ? { data: { uuid: record.id, titulo: record.title, created_at: new Date().toISOString() } } : null;
+    })(),
     error: error ? { message: error.message, status: error.status, data: error.data } : null
   };
   state.lastRun = item;
