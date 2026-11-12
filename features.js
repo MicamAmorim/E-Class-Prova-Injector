@@ -96,6 +96,8 @@
           title: String(exam.titulo || 'Prova sem título'),
           scheduledDate: String(app.data_inicio || exam.aplicacoes_min_data_inicio || ''),
           status: app.status,
+          ended: app.encerrada,
+          attempts: app.tentativa_count,
           raw: app
         });
       }
