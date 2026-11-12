@@ -195,7 +195,7 @@ test('carregamento de uma aplicação desativa seleção de turmas e bloqueia ad
     classesLockStatus: { textContent: '' },
     inject: { disabled: false }
   };
-  const state = { remote: {}, figureBindings: {}, existingTarget: null, existingLookupSeq: 0 };
+  const state = { remote: {}, figureBindings: {}, existingTarget: null, existingLookupSeq: 0, parsed: [] };
   const document = {
     querySelectorAll: selector => selector === '.classCheck' ? checkboxes : [],
     createElement: () => ({ textContent: '' })
