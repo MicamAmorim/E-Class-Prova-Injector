@@ -243,8 +243,9 @@ function renderExistingDestination() {
     const range = included.length ?
       ' · Q' + first + (last !== first ? '–Q' + last : '') +
       ' (' + included.length + ' questão(ões))' : '';
-    const quota = part.limit == null ? 'sem limite informado' :
-      part.remaining + '/' + part.limit + ' vaga(s) restantes';
+    const quota = part.limit == null ? 'cota não informada' :
+      (Number.isFinite(part.remaining) ? part.remaining + '/' : '') +
+      part.limit + ' vaga(s) da atribuição';
     item.textContent = part.subjectName + ' (' + part.subjectId + ') · ' + quota + range;
     list.appendChild(item);
   }
