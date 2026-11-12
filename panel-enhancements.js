@@ -246,6 +246,11 @@ function validateEnhancements(c) {
       EClassFeatures.replaceFigureTags(tag, questionImages(q), q.number);
     }
   }
+  const totalInline = Object.values(state.figureBindings).flatMap(group => Object.values(group))
+    .filter(src => src.startsWith('data:')).reduce((sum, src) => sum + src.length, 0);
+  if (totalInline > 3500000) {
+    throw new Error('As figuras embutidas ultrapassam 3,5 MB em base64. Reduza ou use URLs HTTPS.');
+  }
   if (c.existingMode) {
     if (c.onlyQuestions || c.specificStudents) throw new Error('Modo de atualização é incompatível com os outros modos.');
     if (!c.targetAssessmentId) throw new Error('Selecione uma prova existente ou informe seu UUID.');
