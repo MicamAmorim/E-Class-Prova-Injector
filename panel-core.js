@@ -124,7 +124,10 @@ async function apiFetch(url, { method = 'GET', headers = {}, body = null } = {})
 }
 
 function formConfig() {
-  const selectedClasses = [...document.querySelectorAll('.classCheck:checked')].map(x => Number(x.value));
+  const selectedClasses = $('useExistingAssessment')?.checked &&
+    state.existingTarget?.id === targetAssessmentId() ?
+    [...state.existingTarget.audience.classIds] :
+    [...document.querySelectorAll('.classCheck:checked')].map(x => Number(x.value));
   return {
     academicYear: Number($('academicYear').value),
     association: Number($('association').value),
