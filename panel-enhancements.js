@@ -5,6 +5,10 @@
 state.figureBindings = {};
 state.remote.students = [];
 state.pendingOperation = null;
+state.existingTarget = null;
+state.existingLookupSeq = 0;
+state.savedNewClasses = null;
+state.lastExistingMode = false;
 
 function questionImages(q) {
   return state.figureBindings[q.number] || (state.figureBindings[q.number] = {});
@@ -170,9 +174,101 @@ function renderStudentRoster() {
     'O retorno de turmas não trouxe matrículas individuais. Informe os IDs abaixo.';
 }
 
+function renderExistingAudience() {
+  const existing = $('useExistingAssessment').checked;
+  const selected = state.existingTarget;
+  const id = targetAssessmentId();
+  const isConfirmed = existing && selected?.id === id;
+  const classes = isConfirmed ? selected.audience.classes : [];
+  const official = new Set(classes.map(x => Number(x.id)));
+  const boxes = [...document.querySelectorAll('.classCheck')];
+
+  for (const box of boxes) {
+    if (existing) {
+      box.checked = isConfirmed && official.has(Number(box.value));
+      box.disabled = true;
+    } else {
+      box.disabled = false;
+    }
+  }
+  $('classesLockStatus').textContent = existing ?
+    'Prova existente: as turmas marcadas são as registradas pelo E-Class, somente para consulta. Não são alteradas pelo Injector.' :
+    'Prova nova: selecione as turmas que receberão a avaliação.';
+  const audienceList = $('existingAudienceList');
+  audienceList.replaceChildren();
+  if (!existing) return;
+  if (!id) {
+    $('existingAudienceStatus').textContent = 'Selecione uma prova para consultar as turmas vinculadas.';
+    return;
+  }
+  if (!isConfirmed) {
+    $('existingAudienceStatus').textContent = 'Turmas ainda não verificadas para esta aplicação. Nada será modificado.';
+    return;
+  }
+  for (const group of classes) {
+    const label = document.createElement('div');
+    const count = group.count == null ? '' : ' · ' + group.count + ' destinatário(s)';
+    label.textContent = group.name + ' (turma ' + group.id + ')' + count;
+    audienceList.appendChild(label);
+  }
+  const perm = selected.permissions;
+  const owner = perm.isOwnerKnown ?
+    (perm.isOwner ? 'Conta identificada como proprietária.' :
+     'Conta NÃO identificada como proprietária (coautoria pode conceder outras permissões).') :
+    'Propriedade não informada.';
+  const text = selected.audience.verified ?
+    classes.length + ' turma(s) vinculada(s) pelo portal.' :
+    'O portal não forneceu publico_alvo válido; edição bloqueada.';
+  $('existingAudienceStatus').textContent =
+    text + ' ' + owner + ' ' +
+    (perm.active ? 'Aplicação ativa/encerrada ou com tentativas.' :
+      'O HAR não comprova permissão para editar turmas; a seleção permanece bloqueada.') +
+    (selected.audience.hasIndividuals ? ' Público-alvo também inclui destinatários individuais.' : '');
+}
+
+async function loadExistingAudience() {
+  const current = ++state.existingLookupSeq;
+  state.existingTarget = null;
+  renderExistingAudience();
+  if (!$('useExistingAssessment').checked) return;
+  const id = targetAssessmentId();
+  if (!id) return;
+  $('existingAudienceStatus').textContent = 'Consultando turmas e permissões registradas no E-Class...';
+  try {
+    const response = await apiFetch(targetAssessmentUrl(id), {
+      headers: portalHeaders(false, false)
+    });
+    const detail = normalizeAssessmentDetail(response);
+    if (!detail || String(detail.aplicacao?.uuid) !== String(id)) {
+      throw new Error('O retorno não contém o detalhe da aplicação esperada.');
+    }
+    if (current !== state.existingLookupSeq || !$('useExistingAssessment').checked ||
+        targetAssessmentId() !== id) return;
+    const audience = EClassFeatures.assessmentAudience(detail);
+    const permissions = EClassFeatures.assessmentPermissions(detail);
+    state.existingTarget = { id, audience, permissions };
+    renderExistingAudience();
+    if (!audience.verified) {
+      log('O E-Class não retornou as turmas oficiais da aplicação ' + id + '.', 'warn');
+    } else {
+      log('Prova existente: ' + audience.classes.length + ' turma(s) carregada(s) do público-alvo oficial; seleção de turmas bloqueada.', 'ok');
+    }
+  } catch (error) {
+    if (current !== state.existingLookupSeq) return;
+    renderExistingAudience();
+    $('existingAudienceStatus').textContent =
+      'Não foi possível consultar as turmas oficiais (' + assessmentErrorBrief(error) +
+      '). Nenhuma turma será alterada.';
+    log($('existingAudienceStatus').textContent, 'warn');
+  }
+}
+
 function toggleModes() {
   $('studentsArea').classList.toggle('hidden', !$('specificStudents').checked);
   const existing = $('useExistingAssessment').checked;
+  if (existing && !state.lastExistingMode) {
+    state.savedNewClasses = [...document.querySelectorAll('.classCheck:checked')].map(x => Number(x.value));
+  }
   $('existingArea').classList.toggle('hidden', !existing);
   $('newAssessmentFields').classList.toggle('hidden', existing);
   $('specificStudents').disabled = existing;
@@ -182,6 +278,15 @@ function toggleModes() {
     $('studentsArea').classList.add('hidden');
     $('onlyQuestions').checked = false;
   }
+  if (!existing && state.lastExistingMode) {
+    state.existingLookupSeq++;
+    state.existingTarget = null;
+    const restore = new Set(state.savedNewClasses || []);
+    for (const el of document.querySelectorAll('.classCheck')) el.checked = restore.has(Number(el.value));
+  }
+  state.lastExistingMode = existing;
+  renderExistingAudience();
+  if (existing) safe(loadExistingAudience);
   $('inject').textContent = existing ? 'Adicionar questões à prova' : 'Criar no E-Class';
 }
 
@@ -426,7 +531,9 @@ function enhancementsBind() {
   $('loadAssessments').addEventListener('click', () => safe(loadExistingAssessments));
   $('existingAssessments').addEventListener('change', () => {
     $('existingAssessmentId').value = $('existingAssessments').value;
+    safe(loadExistingAudience);
   });
+  $('existingAssessmentId').addEventListener('change', () => safe(loadExistingAudience));
   $('studentAudienceTemplate').addEventListener('change', persistConfig);
   toggleModes();
   renderStudentRoster();
@@ -437,6 +544,9 @@ function enhancementsFormConfig() {
     specificStudents: $('specificStudents').checked,
     students: $('specificStudents').checked ? collectSelectedStudents() : [],
     existingMode: $('useExistingAssessment').checked,
-    targetAssessmentId: $('useExistingAssessment').checked ? targetAssessmentId() : ''
+    targetAssessmentId: $('useExistingAssessment').checked ? targetAssessmentId() : '',
+    existingAudienceClassIds: $('useExistingAssessment').checked &&
+      state.existingTarget?.id === targetAssessmentId() ?
+      [...state.existingTarget.audience.classIds] : []
   };
 }
