@@ -11,8 +11,10 @@ async function loadPortalData() {
   state.remote.classes = classes?.data || [];
   state.remote.terms = terms?.data || [];
   state.remote.subjects = subjects?.data || [];
+  state.remote.students = EClassFeatures.studentsFromClasses(state.remote.classes);
   if (state.remote.classes[0]?.entidade?.nome) $('entityName').value = state.remote.classes[0].entidade.nome;
   rebuildSelectors();
+  renderStudentRoster();
   log(`Portal carregado: ${state.remote.classes.length} turmas, ${state.remote.terms.length} períodos, ${state.remote.subjects.length} disciplinas.`, 'ok');
 }
 
@@ -25,6 +27,7 @@ function renderPreview() {
     const corr = q.correct == null ? '⚠ sem gabarito' : String.fromCharCode(65 + q.correct);
     card.innerHTML = `<div class="qhead"><span>Q${q.number}</span><span>correta: ${corr}</span></div><div class="qraw">${escapeHtml(q.stem)}</div><ol type="A">${q.choices.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ol>`;
     $('preview').appendChild(card);
+    renderFigurePreview(q, card);
   }
   $('questionCount').textContent = `${state.parsed.length} questões`;
 }
@@ -47,6 +50,8 @@ function analyzeLatex() {
 
 async function fileChanged(file) {
   state.fileName = file?.name || null;
+  state.parsed = [];
+  state.figureBindings = {};
   state.latex = file ? await file.text() : '';
   $('analysisSummary').textContent = file ? `${file.name} carregado. Clique “Analisar LaTeX”.` : 'Nenhum arquivo analisado.';
 }
@@ -63,7 +68,7 @@ async function uploadMath(latex) {
   return data.url;
 }
 
-async function latexFragmentToHtml(raw, doNetwork) {
+async function latexFragmentToHtml(raw, doNetwork, questionNumber = null) {
   const x = EClassParser.latexTextToHtmlSkeleton(raw, state.macroMap);
   let html = x.skeleton;
   if (doNetwork) {
@@ -74,6 +79,7 @@ async function latexFragmentToHtml(raw, doNetwork) {
   } else {
     x.math.forEach((f, i) => { html = html.replace(`@@ECIMATH${i}@@`, `<code>${escapeHtml(f)}</code>`); });
   }
+  if (questionNumber != null) html = EClassFeatures.replaceFigureTags(html, state.figureBindings[questionNumber] || {}, questionNumber);
   return { html, warnings: x.warnings, formulas: x.math };
 }
 
@@ -121,7 +127,7 @@ function assessmentPayload(c, created) {
       mostrar_gabarito_professor_data_pre_aplicacao: false,
       mostrar_resultado: false, modo_aplicacao: 1, status: false,
       pre_aplicacao: false,
-      publico_alvo: c.classes.map(id => ({ turma_id: id, entidade_id: c.entityId })),
+      publico_alvo: composeAudience(c),
       duplicar: false, disciplina_opcionais: [],
       data_inicio: `${c.startDate} 00:00:00`,
       bimestre_id: c.termId, bimestre_n: null, bloquear_saida: 0,
@@ -145,11 +151,12 @@ function assessmentPayload(c, created) {
 
 function validate(c) {
   if (!state.parsed.length) analyzeLatex();
-  if (!c.title) throw new Error('Informe o título da prova.');
-  if (!c.startDate || !c.resultDate) throw new Error('Informe as datas.');
-  if (new Date(c.resultDate) < new Date(c.startDate)) throw new Error('A data de resultado é anterior à data inicial.');
-  if (!c.classes.length) throw new Error('Selecione pelo menos uma turma.');
-  if (!c.subjectId || !c.termId) throw new Error('Disciplina e bimestre são obrigatórios.');
+  if (!c.existingMode && !c.title) throw new Error('Informe o título da prova.');
+  if (!c.existingMode && (!c.startDate || !c.resultDate)) throw new Error('Informe as datas.');
+  if (!c.existingMode && new Date(c.resultDate) < new Date(c.startDate)) throw new Error('A data de resultado é anterior à data inicial.');
+  if (!c.existingMode && !c.classes.length) throw new Error('Selecione pelo menos uma turma.');
+  if (!c.subjectId || (!c.existingMode && !c.termId)) throw new Error('Disciplina e bimestre são obrigatórios.');
   const missing = state.parsed.filter(q => q.correct == null);
   if (missing.length) throw new Error(`Falta gabarito nas questões: ${missing.map(x => x.number).join(', ')}`);
+  validateEnhancements(c);
 }
