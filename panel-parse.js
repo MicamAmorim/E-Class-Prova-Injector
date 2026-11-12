@@ -12,6 +12,20 @@ async function loadPortalData() {
   state.remote.terms = terms?.data || [];
   state.remote.subjects = subjects?.data || [];
   state.remote.students = EClassFeatures.studentsFromClasses(state.remote.classes);
+  // Consulta complementar opcional para popular turmas/alunos no Corretor.
+  // A mesma rota era utilizada na branch word. Se estiver indisponível,
+  // a importação da prova NÃO é interrompida: exportação geral continua.
+  try {
+    const response = await apiFetch(API.students(c.entityId), { headers: portalHeaders(false) });
+    const imported = EClassOmrExport.normalizeRoster(response);
+    const unique = new Map(state.remote.students.map(x => [x.classId + ':' + x.id, x]));
+    for (const student of imported) unique.set(student.classId + ':' + student.id, student);
+    state.remote.students = [...unique.values()];
+    log('Corretor: ' + state.remote.students.length + ' matrícula(s) de aluno(s) disponível(is) para exportação.', 'ok');
+  } catch (error) {
+    log('Lista complementar de alunos indisponível; exportação de gabarito geral segue funcionando. (' +
+      (error.status ? 'HTTP ' + error.status : 'erro de consulta') + ')', 'warn');
+  }
   if (state.remote.classes[0]?.entidade?.nome) $('entityName').value = state.remote.classes[0].entidade.nome;
   rebuildSelectors();
   renderStudentRoster();
