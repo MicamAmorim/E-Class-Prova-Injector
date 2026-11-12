@@ -148,6 +148,20 @@
     </section>
 
     <section class="card">
+      <div class="row space wrap">
+        <div>
+          <h2>4. Corretor de gabaritos</h2>
+          <p class="hint">Exporta apenas as respostas das questões objetivas para o nosso Corretor (.eclass-omr.json). Funciona sem criar ou atualizar prova no E-Class.</p>
+        </div>
+        <button id="exportOmr" class="secondary" type="button">Exportar para Corretor</button>
+      </div>
+      <label>Título do gabarito (opcional; usa o título da prova se deixado em branco)
+        <input id="omrTitle" type="text" placeholder="Ex.: Prova de Matemática – 4º bimestre">
+      </label>
+      <p id="omrExportStatus" class="hint">Analise a prova para liberar a exportação.</p>
+    </section>
+
+    <section class="card">
       <div class="row space">
         <h2>Prévia</h2>
         <span id="questionCount" class="pill">0 questões</span>
@@ -172,6 +186,8 @@
   <script src="panel-enhancements.js"></script>
   <script src="panel-image-import.js"></script>
   <script src="panel-run.js"></script>
+  <script src="omr-export.js"></script>
+  <script src="panel-omr.js"></script>
   <script src="panel-init.js"></script>
 </body>
 </html>
